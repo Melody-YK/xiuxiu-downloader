@@ -132,6 +132,7 @@ function startIngestServer() {
         res.end();
         return;
       }
+      pruneCaptures();
       for (const e of entries) {
         captures.unshift({
           url: e.url ?? '',
@@ -213,6 +214,17 @@ ipcMain.handle('task:cancel', (_e, id) => jobs.cancel(id));
 ipcMain.handle('util:openFolder', (_e, p) => {
   if (typeof p === 'string' && p !== '') shell.showItemInFolder(p);
 });
+ipcMain.handle('capture:remove', (_e, url) => {
+  const i = captures.findIndex((c) => c.url === url);
+  if (i >= 0) captures.splice(i, 1);
+});
+
+/** 捕获条目生命周期：超过 2 小时未更新的条目自动清理 */
+const CAPTURE_TTL = 2 * 60 * 60 * 1000;
+function pruneCaptures() {
+  const now = Date.now();
+  while (captures.length > 0 && now - (captures[captures.length - 1].at ?? 0) > CAPTURE_TTL) captures.pop();
+}
 ipcMain.handle('util:chooseSavePath', async (_e, opts) => {
   const def = typeof opts?.defaultName === 'string' && opts.defaultName !== '' ? opts.defaultName : 'download';
   const r = await dialog.showSaveDialog(win, {

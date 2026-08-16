@@ -208,6 +208,17 @@ function renderCaptures() {
     const meta = document.createElement('div');
     meta.className = 'c-meta';
     meta.textContent = (c.pageTitle ?? '') + (c.size != null ? ' · ' + fmtSize(c.size) : '');
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '删除';
+    delBtn.title = '从捕获列表移除';
+    delBtn.addEventListener('click', () => {
+      void bridge.removeCapture(c.url).then(() => {
+        state.captures = state.captures.filter((x) => x.url !== c.url);
+        capCount.textContent = String(state.captures.length);
+        renderCaptures();
+      });
+    });
+
     const dl = document.createElement('button');
     dl.className = 'primary';
     dl.textContent = '下载';
@@ -228,7 +239,7 @@ function renderCaptures() {
         if (ok) switchTab('dl');
       });
     });
-    row.append(badge, name, meta, dl);
+    row.append(badge, name, meta, delBtn, dl);
     capturesEl.append(row);
   }
 }

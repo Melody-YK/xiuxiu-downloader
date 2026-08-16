@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   addTask: (task) => ipcRenderer.invoke('task:add', task),
   cancelTask: (id) => ipcRenderer.invoke('task:cancel', id),
   openFolder: (p) => ipcRenderer.invoke('util:openFolder', p),
+  removeCapture: (url) => ipcRenderer.invoke('capture:remove', url),
   chooseSavePath: (opts) => ipcRenderer.invoke('util:chooseSavePath', opts),
   getSnapshot: () => ipcRenderer.invoke('app:getSnapshot'),
   onTaskEvent: (cb) => ipcRenderer.on('task:event', (_e, ev) => cb(ev)),

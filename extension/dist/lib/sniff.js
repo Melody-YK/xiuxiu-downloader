@@ -60,6 +60,32 @@ export function getHeader(headers, name) {
     }
     return null;
 }
+/** 从 B站 playurl 地址提取视频标识（bvid/ep_id/aid） */
+export function bvidFromPlayurl(url) {
+    const m = /[?&]bvid=([A-Za-z0-9]+)/.exec(url);
+    if (m !== null)
+        return m[1] ?? '';
+    const e = /[?&]ep_id=(\d+)/.exec(url);
+    if (e !== null)
+        return 'ep' + (e[1] ?? '');
+    const a = /[?&]aid=(\d+)/.exec(url);
+    if (a !== null)
+        return 'av' + (a[1] ?? '');
+    return '';
+}
+/** 从 B站页面地址提取视频标识（/video/BVxxx、/ep123、/av123） */
+export function bvidFromPageUrl(url) {
+    const m = /\/video\/(BV[0-9A-Za-z]+)/.exec(url);
+    if (m !== null)
+        return m[1] ?? '';
+    const ep = /\/ep(\d+)/.exec(url);
+    if (ep !== null)
+        return 'ep' + (ep[1] ?? '');
+    const av = /\/av(\d+)/.exec(url);
+    if (av !== null)
+        return 'av' + (av[1] ?? '');
+    return '';
+}
 /** 从 <video>/<audio> 元素提取可下载的媒体地址（跳过 blob:/data:，兼容 MSE 占位） */
 export function extractMediaUrl(el) {
     const candidates = [el.currentSrc, el.src];

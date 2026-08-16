@@ -138,6 +138,28 @@ export function getHeader(headers: readonly HeaderLike[], name: string): string 
   return null;
 }
 
+/** 从 B站 playurl 地址提取视频标识（bvid/ep_id/aid） */
+export function bvidFromPlayurl(url: string): string {
+  const m = /[?&]bvid=([A-Za-z0-9]+)/.exec(url);
+  if (m !== null) return m[1] ?? '';
+  const e = /[?&]ep_id=(\d+)/.exec(url);
+  if (e !== null) return 'ep' + (e[1] ?? '');
+  const a = /[?&]aid=(\d+)/.exec(url);
+  if (a !== null) return 'av' + (a[1] ?? '');
+  return '';
+}
+
+/** 从 B站页面地址提取视频标识（/video/BVxxx、/ep123、/av123） */
+export function bvidFromPageUrl(url: string): string {
+  const m = /\/video\/(BV[0-9A-Za-z]+)/.exec(url);
+  if (m !== null) return m[1] ?? '';
+  const ep = /\/ep(\d+)/.exec(url);
+  if (ep !== null) return 'ep' + (ep[1] ?? '');
+  const av = /\/av(\d+)/.exec(url);
+  if (av !== null) return 'av' + (av[1] ?? '');
+  return '';
+}
+
 export interface MediaElementLike {
   currentSrc?: string;
   src?: string;

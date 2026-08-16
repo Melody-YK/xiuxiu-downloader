@@ -271,6 +271,18 @@ test('background：hook 按 bvid 区分不同视频并记录标题', async () =>
   assert.equal(b.pageTitle, '', '预览视频不贴主视频标题');
 });
 
+test('background：entry:remove 删除单个捕获条目', async () => {
+  globalThis.chrome.runtime.onMessage._emit(
+    { type: 'entry:remove', url: 'https://cdn.example/bunny.mp4' },
+    {},
+    () => {},
+  );
+  await sleep(600);
+  const stored = storageData[STORAGE_KEY];
+  const found = (stored?.entries ?? []).find((x) => x.url === 'https://cdn.example/bunny.mp4');
+  assert.equal(found, undefined, '指定条目应被删除');
+});
+
 test('background：popup 清空消息清空状态与存储', async () => {
   let response = null;
   globalThis.chrome.runtime.onMessage._emit({ type: 'clear' }, {}, (v) => {

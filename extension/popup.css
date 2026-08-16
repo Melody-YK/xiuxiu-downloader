@@ -40,7 +40,7 @@ main {
   background: #fff;
   border: 1px solid #e4e7eb;
   border-radius: 8px;
-  padding: 8px 72px 8px 8px;
+  padding: 8px 128px 8px 8px;
 }
 .row-head { display: flex; align-items: center; gap: 6px; }
 .badge {
@@ -70,6 +70,7 @@ main {
   white-space: nowrap;
 }
 .copy { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
+.del { position: absolute; right: 64px; top: 50%; transform: translateY(-50%); color: #cf222e; border-color: #ff8182; }
 .empty {
   text-align: center;
   color: #57606a;

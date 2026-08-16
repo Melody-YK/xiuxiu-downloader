@@ -92,7 +92,15 @@ function buildRow(entry: Entry): HTMLElement {
     void copyRow(copyBtn, entry.url);
   });
 
-  row.append(head, meta, copyBtn);
+  const delBtn = document.createElement('button');
+  delBtn.className = 'del';
+  delBtn.textContent = '删除';
+  delBtn.title = '从捕获列表移除该条目';
+  delBtn.addEventListener('click', () => {
+    void chrome.runtime.sendMessage({ type: 'entry:remove', url: entry.url }).then(() => render());
+  });
+
+  row.append(head, meta, delBtn, copyBtn);
   return row;
 }
 

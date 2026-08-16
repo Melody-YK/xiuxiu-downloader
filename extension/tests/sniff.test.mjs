@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyCapture,
+  bvidFromPageUrl,
+  bvidFromPlayurl,
   classify,
   createEmptyState,
   extOf,
@@ -158,6 +160,16 @@ test('applyCapture：dedupeKey 更新时非空标题覆盖、空标题保留原�
   assert.equal(state.entries[0]?.pageTitle, '真实标题', '新捕获带有效标题应覆盖');
   applyCapture(state, cap({ url: 'https://b.b/p?sig=3', type: 'dash', dedupeKey: 'k', pageTitle: '' }));
   assert.equal(state.entries[0]?.pageTitle, '真实标题', '空标题不应覆盖已有标题');
+});
+
+test('bvid 提取：playurl 查询参数与页面路径', () => {
+  assert.equal(bvidFromPlayurl('https://api.bilibili.com/x/player/wbi/playurl?bvid=BV1xx&cid=1'), 'BV1xx');
+  assert.equal(bvidFromPlayurl('https://api.bilibili.com/pgc/player/web/playurl?ep_id=12345'), 'ep12345');
+  assert.equal(bvidFromPlayurl('https://a.com/x?aid=999'), 'av999');
+  assert.equal(bvidFromPlayurl('https://a.com/x'), '');
+  assert.equal(bvidFromPageUrl('https://www.bilibili.com/video/BV1Mybk65EBt/?spm=1'), 'BV1Mybk65EBt');
+  assert.equal(bvidFromPageUrl('https://www.bilibili.com/bangumi/play/ep12345'), 'ep12345');
+  assert.equal(bvidFromPageUrl('https://www.bilibili.com/'), '');
 });
 
 test('applyCapture：列表条数上限', () => {

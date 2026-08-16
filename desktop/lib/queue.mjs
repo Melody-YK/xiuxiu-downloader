@@ -10,6 +10,11 @@ export function isMediaUrl(url) {
 }
 
 export function defaultFileName(url) {
+  if (isBiliPlayurlUrl(url)) {
+    const m = /[?&]bvid=([A-Za-z0-9]+)/.exec(url);
+    if (m !== null && m[1]) return 'bilibili_' + m[1] + '.mp4';
+    return 'bilibili_video.mp4';
+  }
   try {
     const seg = new URL(url).pathname.split('/').filter(Boolean).pop();
     if (seg !== undefined && seg !== '') {

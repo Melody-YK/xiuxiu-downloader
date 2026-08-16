@@ -1,5 +1,27 @@
-// content script（第 1 层捕获 + IDM 式体验）：扫描 <video>/<audio> 并注入悬浮下载按钮
-import { extractMediaUrl } from './lib/sniff.js';
+// content script（第 1 层捕获 + IDM 式体验）：扫描 <video>/<audio> 并注入悬浮下载按钮。
+// 注意：MV3 的 content script 以「经典脚本」运行，不能使用 import/export——
+// extractMediaUrl 与 lib/sniff.ts 中同名函数保持一致（逻辑重复是有意的，单测覆盖 lib 版本）。
+interface MediaElementLike {
+  currentSrc?: string;
+  src?: string;
+  children?: ArrayLike<unknown>;
+}
+
+function extractMediaUrl(el: MediaElementLike): string | null {
+  const candidates: unknown[] = [el.currentSrc, el.src];
+  if (el.children !== undefined) {
+    for (let i = 0; i < el.children.length; i += 1) {
+      const child = el.children[i];
+      if (typeof child === 'object' && child !== null && 'src' in child) {
+        candidates.push((child as { src?: unknown }).src);
+      }
+    }
+  }
+  for (const c of candidates) {
+    if (typeof c === 'string' && c !== '' && /^https?:\/\//i.test(c)) return c;
+  }
+  return null;
+}
 
 const processed = new WeakSet<Element>();
 let scanTimer: ReturnType<typeof setTimeout> | null = null;

@@ -1,4 +1,4 @@
-import { applyCapture, classify, createEmptyState, extOf, extractRequestHeaders, getHeader, NATIVE_HOST_NAME, STORAGE_KEY, } from './lib/sniff.js';
+import { applyCapture, bvidFromPageUrl, bvidFromPlayurl, classify, createEmptyState, extOf, extractRequestHeaders, getHeader, NATIVE_HOST_NAME, STORAGE_KEY, } from './lib/sniff.js';
 // ---- 状态管理：内存为唯一事实源，chrome.storage 为持久化镜像 ----
 let state = createEmptyState();
 /** SW 生命周期内的快速去重（持久化去重依赖 state.entries / segmentKeys） */
@@ -6,12 +6,19 @@ const memoryDedupe = new Set();
 let writeTimer = null;
 let pendingWrite = Promise.resolve();
 const loaded = loadState();
+/** 捕获条目生命周期：超过该时长未再出现的条目自动清理 */
+const ENTRY_TTL = 2 * 60 * 60 * 1000;
 async function loadState() {
     try {
         const stored = await chrome.storage.local.get(STORAGE_KEY);
         const raw = stored[STORAGE_KEY];
         if (isCaptureState(raw)) {
-            state = { nextId: raw.nextId, entries: raw.entries, segmentKeys: raw.segmentKeys };
+            const now = Date.now();
+            state = {
+                nextId: raw.nextId,
+                entries: raw.entries.filter((e) => now - (e.lastSeenAt ?? e.createdAt ?? now) < ENTRY_TTL),
+                segmentKeys: raw.segmentKeys,
+            };
         }
     }
     catch (err) {
@@ -28,19 +35,6 @@ function isCaptureState(v) {
 }
 function keyOf(tabId, url) {
     return String(tabId) + '|' + url;
-}
-/** 从 B站 playurl 地址提取视频标识（bvid/ep_id/aid），用于按视频分条 */
-function bvidFromUrl(url) {
-    const m = /[?&]bvid=([A-Za-z0-9]+)/.exec(url);
-    if (m !== null)
-        return m[1] ?? '';
-    const e = /[?&]ep_id=(\d+)/.exec(url);
-    if (e !== null)
-        return 'ep' + (e[1] ?? '');
-    const a = /[?&]aid=(\d+)/.exec(url);
-    if (a !== null)
-        return 'av' + (a[1] ?? '');
-    return '';
 }
 /** 防抖持久化：HLS 分片请求密集，不能每次都全量写 storage */
 function schedulePersist() {
@@ -126,8 +120,14 @@ async function handleResponse(details) {
             headerCache.delete(details.requestId);
         const size = parseSize(getHeader(headers, 'content-length'));
         const page = await getPageInfo(details.tabId, details.initiator ?? '');
-        const bvid = isBiliPlayurl ? bvidFromUrl(url) : '';
-        const pageTitle = isBiliPlayurl ? cleanBiliTitle(page.title) : page.title;
+        const bvid = isBiliPlayurl ? bvidFromPlayurl(url) : '';
+        let pageTitle = isBiliPlayurl ? cleanBiliTitle(page.title) : page.title;
+        if (isBiliPlayurl && pageTitle !== '') {
+            // 只给「当前页面视频」的 playurl 贴标题；侧栏预览视频（bvid 与页面不符）不贴，避免张冠李戴
+            const tabBvid = bvidFromPageUrl(page.url);
+            if (tabBvid === '' || bvid === '' || tabBvid !== bvid)
+                pageTitle = '';
+        }
         const capture = {
             url,
             tabId: details.tabId,
@@ -186,7 +186,7 @@ async function applyHookUrl(url, sender, bvid, title) {
         const headers = headersByUrl.get(key);
         if (headers !== undefined)
             headersByUrl.delete(key);
-        const bid = isBili ? (bvid !== undefined && bvid !== '' ? bvid : bvidFromUrl(url) || 'playurl') : '';
+        const bid = isBili ? (bvid !== undefined && bvid !== '' ? bvid : bvidFromPlayurl(url) || 'playurl') : '';
         const result = applyCapture(state, {
             url,
             tabId,
@@ -294,6 +294,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (t === 'hook:inject') {
         injectPageHook(sender);
+        sendResponse({ ok: true });
+        return;
+    }
+    if (t === 'entry:remove') {
+        const url = typeof message.url === 'string' ? (message.url ?? '') : '';
+        if (url !== '') {
+            state.entries = state.entries.filter((e) => e.url !== url);
+            state.segmentKeys = state.segmentKeys.filter((k) => !k.endsWith('|' + url));
+            schedulePersist();
+        }
         sendResponse({ ok: true });
         return;
     }

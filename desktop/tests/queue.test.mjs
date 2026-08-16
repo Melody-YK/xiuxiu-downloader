@@ -5,7 +5,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { JobManager, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
+import { JobManager, defaultFileName, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
 import { sleep } from '../lib/downloader.mjs';
 
 const TMP = join(tmpdir(), 'queue-test-' + process.pid);
@@ -94,6 +94,12 @@ test('isMediaUrl：识别 m3u8/mpd', () => {
   assert.equal(isMediaUrl('https://a.com/x.m3u8?token=1'), true);
   assert.equal(isMediaUrl('https://a.com/x.mpd'), true);
   assert.equal(isMediaUrl('https://a.com/x.mp4'), false);
+});
+
+test('defaultFileName：playurl 地址用 bvid 兜底命名', () => {
+  assert.equal(defaultFileName('https://api.bilibili.com/x/player/wbi/playurl?bvid=BV123&cid=1'), 'bilibili_BV123.mp4');
+  assert.equal(defaultFileName('https://api.bilibili.com/x/player/wbi/playurl'), 'bilibili_video.mp4');
+  assert.equal(defaultFileName('https://a.com/v/bunny.mp4'), 'bunny.mp4');
 });
 
 test('sanitizeFileName：清洗非法字符与限长', () => {

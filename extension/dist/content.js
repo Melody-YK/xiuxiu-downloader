@@ -1,5 +1,20 @@
-// content script（第 1 层捕获 + IDM 式体验）：扫描 <video>/<audio> 并注入悬浮下载按钮
-import { extractMediaUrl } from './lib/sniff.js';
+"use strict";
+function extractMediaUrl(el) {
+    const candidates = [el.currentSrc, el.src];
+    if (el.children !== undefined) {
+        for (let i = 0; i < el.children.length; i += 1) {
+            const child = el.children[i];
+            if (typeof child === 'object' && child !== null && 'src' in child) {
+                candidates.push(child.src);
+            }
+        }
+    }
+    for (const c of candidates) {
+        if (typeof c === 'string' && c !== '' && /^https?:\/\//i.test(c))
+            return c;
+    }
+    return null;
+}
 const processed = new WeakSet();
 let scanTimer = null;
 function throttle(fn, ms) {
