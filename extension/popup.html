@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>嗅探下载器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>嗅探下载器</h1>
+    <div class="toolbar">
+      <span id="count">0 条</span>
+      <button id="refresh" type="button">刷新</button>
+      <button id="copyAll" type="button">复制全部</button>
+      <button id="clear" type="button">清空</button>
+    </div>
+  </header>
+  <main id="list"></main>
+  <footer>仅捕获 http(s) 媒体请求；blob:/MSE 流将在后续 Hook 层支持</footer>
+  <script type="module" src="dist/popup.js"></script>
+</body>
+</html>

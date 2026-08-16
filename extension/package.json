@@ -1,0 +1,17 @@
+{
+  "name": "@downloader/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MV3 媒体嗅探扩展：捕获网页媒体/文件地址，供桌面端下载",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "pretest": "tsc -p tsconfig.json",
+    "test": "node --test tests/sniff.test.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.6",
+    "typescript": "^7.0.2"
+  }
+}
