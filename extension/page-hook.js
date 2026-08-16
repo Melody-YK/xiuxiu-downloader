@@ -38,6 +38,15 @@
       } catch (e) {
         // 忽略
       }
+      if (title === '') {
+        // 兜底：用页面标题（去掉后缀），但排除 B站默认标题
+        try {
+          var dt = (document.title || '').replace(/_哔哩哔哩_bilibili\s*$/, '').trim();
+          if (dt !== '' && dt !== '哔哩哔哩 (゜-゜)つロ 干杯~') title = dt;
+        } catch (e) {
+          // 忽略
+        }
+      }
     }
     try {
       window.postMessage({ source: 'sniffer-page-hook', url: url, bvid: bvid, title: title }, '*');

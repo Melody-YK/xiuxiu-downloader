@@ -62,6 +62,12 @@ function schedulePersist() {
 // ---- 请求头嗅探：onBeforeSendHeaders 只读观察（Cookie/Referer/UA 需 extraHeaders） ----
 /** B站播放地址接口（无媒体扩展名，但必须透传请求头；含 WBI 签名路径） */
 const BILI_PLAYURL_RE = /bilibili\.com\/(x\/player\/(wbi\/)?playurl|pgc\/player\/web\/playurl)/i;
+/** B站页面尚未加载视频信息时的默认标签页标题（视为无效标题） */
+const BILI_DEFAULT_TITLE = '哔哩哔哩 (゜-゜)つロ 干杯~-bilibili';
+function cleanBiliTitle(t) {
+    const s = t.replace(/_哔哩哔哩_bilibili\s*$/i, '').trim();
+    return s === BILI_DEFAULT_TITLE || s === '' ? '' : s;
+}
 const headerCache = new Map();
 /** URL 级请求头（tabId|url），供 hook 层按 URL 补全透传头 */
 const headersByUrl = new Map();
@@ -121,9 +127,7 @@ async function handleResponse(details) {
         const size = parseSize(getHeader(headers, 'content-length'));
         const page = await getPageInfo(details.tabId, details.initiator ?? '');
         const bvid = isBiliPlayurl ? bvidFromUrl(url) : '';
-        let pageTitle = page.title;
-        if (isBiliPlayurl)
-            pageTitle = pageTitle.replace(/_哔哩哔哩_bilibili\s*$/i, '').trim();
+        const pageTitle = isBiliPlayurl ? cleanBiliTitle(page.title) : page.title;
         const capture = {
             url,
             tabId: details.tabId,

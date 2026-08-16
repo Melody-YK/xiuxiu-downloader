@@ -150,6 +150,16 @@ test('applyCapture：dedupeKey 同页只留一条并保留最新 URL', () => {
   assert.equal(state.entries.length, 2);
 });
 
+test('applyCapture：dedupeKey 更新时非空标题覆盖、空标题保留原值', () => {
+  const state = createEmptyState();
+  applyCapture(state, cap({ url: 'https://b.b/p?sig=1', type: 'dash', dedupeKey: 'k', pageTitle: '' }));
+  assert.equal(state.entries[0]?.pageTitle, '');
+  applyCapture(state, cap({ url: 'https://b.b/p?sig=2', type: 'dash', dedupeKey: 'k', pageTitle: '真实标题' }));
+  assert.equal(state.entries[0]?.pageTitle, '真实标题', '新捕获带有效标题应覆盖');
+  applyCapture(state, cap({ url: 'https://b.b/p?sig=3', type: 'dash', dedupeKey: 'k', pageTitle: '' }));
+  assert.equal(state.entries[0]?.pageTitle, '真实标题', '空标题不应覆盖已有标题');
+});
+
 test('applyCapture：列表条数上限', () => {
   const state = createEmptyState();
   for (let i = 0; i < MAX_ENTRIES + 5; i += 1) {

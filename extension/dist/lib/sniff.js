@@ -110,6 +110,9 @@ export function applyCapture(state, cap) {
             existing.size = cap.size;
         if (cap.headers !== undefined)
             existing.headers = { ...existing.headers, ...cap.headers };
+        // 新捕获带了有效标题时覆盖（如 B站页面标题晚于 playurl 请求更新）
+        if (cap.pageTitle !== undefined && cap.pageTitle !== '')
+            existing.pageTitle = cap.pageTitle;
         if (cap.dedupeKey !== undefined && existing.url !== cap.url) {
             // 同 dedupeKey 的旧条目换成最新 URL（B站 playurl 签名会过期，保留最新请求）
             existing.url = cap.url;

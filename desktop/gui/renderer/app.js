@@ -190,11 +190,12 @@ function upsertTask(t) {
 // ---- 扩展捕获列表 ----
 function renderCaptures() {
   capturesEl.replaceChildren();
-  if (state.captures.length === 0) {
+  const visible = state.captures.filter((c) => c.mediaType !== 'ts');
+  if (visible.length === 0) {
     capturesEl.textContent = '暂无捕获。在扩展 popup 点「发送到桌面端」。';
     return;
   }
-  for (const c of state.captures) {
+  for (const c of visible) {
     const row = document.createElement('div');
     row.className = 'cap';
     const badge = document.createElement('span');

@@ -45,7 +45,9 @@ async function readEntries(): Promise<Entry[]> {
 }
 
 async function render(): Promise<void> {
-  const entries = await readEntries();
+  const all = await readEntries();
+  // 隐藏不可下载的分片条目（ts 类型），分片计数已聚合在 HLS/DASH 条目上
+  const entries = all.filter((e) => e.type !== 'ts');
   listEl.replaceChildren();
   countEl.textContent = String(entries.length) + ' 条';
   if (entries.length === 0) {
