@@ -19,8 +19,15 @@
   <main id="view-dl">
     <details id="settings-panel">
       <summary>设置</summary>
-      <div class="hdr-row"><label>同时任务数 (1-8)</label><input id="s-max" type="number" min="1" max="8" value="2" title="同时进行的下载任务数"></div>
-      <div class="hdr-row"><label>默认线程数 (1-32)</label><input id="s-threads" type="number" min="1" max="32" value="8" title="新任务的默认每任务连接数"></div>
+      <p class="setting-hint">不知道填多少？选一个预设模式即可：</p>
+      <label class="radio"><input type="radio" name="mode" value="balanced"> <b>均衡（推荐）</b><span class="desc">同时 2 个任务、每任务 8 线程——大多数场景的最佳平衡</span></label>
+      <label class="radio"><input type="radio" name="mode" value="aggressive"> <b>激进</b><span class="desc">同时 4 个任务、每任务 16 线程——一次下很多东西时把带宽拉满</span></label>
+      <label class="radio"><input type="radio" name="mode" value="conservative"> <b>保守</b><span class="desc">同时 1 个任务、每任务 4 线程——网络不稳或服务器脆弱时更稳妥</span></label>
+      <label class="radio"><input type="radio" name="mode" value="custom"> <b>自定义</b><span class="desc">自己指定数值</span></label>
+      <div id="custom-fields" hidden>
+        <div class="hdr-row"><label>同时任务数 (1-8)</label><input id="s-max" type="number" min="1" max="8"><span class="desc">同时下载几个任务</span></div>
+        <div class="hdr-row"><label>默认线程数 (1-32)</label><input id="s-threads" type="number" min="1" max="32"><span class="desc">每个任务用几个连接；不是越大越好，8-16 通常已足够，超过带宽上限还可能被服务器限速</span></div>
+      </div>
     </details>
     <form id="add-form">
       <input id="f-url" class="grow" placeholder="粘贴 http(s) 链接（直链 / m3u8 / mpd），也可直接拖入" required>

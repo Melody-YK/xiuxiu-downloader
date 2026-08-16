@@ -16,7 +16,12 @@ if (smoke) {
 }
 const jobs = new JobManager({ maxConcurrent: 2 });
 const captures = [];
-const settings = { maxConcurrent: 2, defaultThreads: 8 };
+const PRESETS = {
+  balanced: { maxConcurrent: 2, defaultThreads: 8 },
+  aggressive: { maxConcurrent: 4, defaultThreads: 16 },
+  conservative: { maxConcurrent: 1, defaultThreads: 4 },
+};
+const settings = { mode: 'balanced', maxConcurrent: 2, defaultThreads: 8 };
 let win = null;
 let historyPath = '';
 let settingsPath = '';
@@ -40,6 +45,7 @@ if (!gotLock) {
     if (!smoke) {
       try {
         const raw = JSON.parse(await readFile(settingsPath, 'utf8'));
+        settings.mode = PRESETS[raw?.mode] !== undefined || raw?.mode === 'custom' ? raw.mode : 'balanced';
         if (typeof raw?.maxConcurrent === 'number') settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(raw.maxConcurrent)));
         if (typeof raw?.defaultThreads === 'number') settings.defaultThreads = Math.max(1, Math.min(32, Math.round(raw.defaultThreads)));
       } catch {
@@ -282,12 +288,21 @@ ipcMain.handle('util:chooseSavePath', async (_e, opts) => {
 ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot(), captures }));
 ipcMain.handle('settings:get', () => ({ ...settings }));
 ipcMain.handle('settings:set', async (_e, opts) => {
-  if (typeof opts?.maxConcurrent === 'number') {
-    settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(opts.maxConcurrent)));
-    jobs.setMaxConcurrent(settings.maxConcurrent);
-  }
-  if (typeof opts?.defaultThreads === 'number') {
-    settings.defaultThreads = Math.max(1, Math.min(32, Math.round(opts.defaultThreads)));
+  if (typeof opts?.mode === 'string' && PRESETS[opts.mode] !== undefined) {
+    const v = PRESETS[opts.mode];
+    settings.mode = opts.mode;
+    settings.maxConcurrent = v.maxConcurrent;
+    settings.defaultThreads = v.defaultThreads;
+    jobs.setMaxConcurrent(v.maxConcurrent);
+  } else {
+    settings.mode = 'custom';
+    if (typeof opts?.maxConcurrent === 'number') {
+      settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(opts.maxConcurrent)));
+      jobs.setMaxConcurrent(settings.maxConcurrent);
+    }
+    if (typeof opts?.defaultThreads === 'number') {
+      settings.defaultThreads = Math.max(1, Math.min(32, Math.round(opts.defaultThreads)));
+    }
   }
   await writeFile(settingsPath, JSON.stringify(settings), 'utf8').catch(() => {});
   return { ...settings };

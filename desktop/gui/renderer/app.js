@@ -64,12 +64,36 @@ tabCapBtn.addEventListener('click', () => switchTab('cap'));
 const sMaxEl = document.getElementById('s-max');
 const sThreadsEl = document.getElementById('s-threads');
 const fThreadsEl = document.getElementById('f-threads');
+const customFields = document.getElementById('custom-fields');
+const PRESETS = {
+  balanced: { maxConcurrent: 2, defaultThreads: 8 },
+  aggressive: { maxConcurrent: 4, defaultThreads: 16 },
+  conservative: { maxConcurrent: 1, defaultThreads: 4 },
+};
+
+function applyPreset(mode) {
+  customFields.hidden = mode !== 'custom';
+  for (const el of document.querySelectorAll('input[name="mode"]')) el.checked = el.value === mode;
+  if (mode === 'custom') return;
+  const v = PRESETS[mode];
+  if (v === undefined) return;
+  sMaxEl.value = String(v.maxConcurrent);
+  sThreadsEl.value = String(v.defaultThreads);
+  fThreadsEl.value = String(v.defaultThreads);
+  void bridge.setSettings({ mode, maxConcurrent: v.maxConcurrent, defaultThreads: v.defaultThreads });
+}
+
+for (const el of document.querySelectorAll('input[name="mode"]')) {
+  el.addEventListener('change', () => {
+    if (el.checked) applyPreset(el.value);
+  });
+}
 
 sMaxEl.addEventListener('change', () => {
-  void bridge.setSettings({ maxConcurrent: Number(sMaxEl.value) || 2 });
+  void bridge.setSettings({ mode: 'custom', maxConcurrent: Number(sMaxEl.value) || 2 });
 });
 sThreadsEl.addEventListener('change', () => {
-  void bridge.setSettings({ defaultThreads: Number(sThreadsEl.value) || 8 });
+  void bridge.setSettings({ mode: 'custom', defaultThreads: Number(sThreadsEl.value) || 8 });
   fThreadsEl.value = String(Number(sThreadsEl.value) || 8);
 });
 
@@ -378,6 +402,9 @@ void (async () => {
     sMaxEl.value = String(s.maxConcurrent ?? 2);
     sThreadsEl.value = String(s.defaultThreads ?? 8);
     fThreadsEl.value = String(s.defaultThreads ?? 8);
+    const mode = PRESETS[s.mode] !== undefined || s.mode === 'custom' ? s.mode : 'balanced';
+    for (const el of document.querySelectorAll('input[name="mode"]')) el.checked = el.value === mode;
+    customFields.hidden = mode !== 'custom';
   } catch {
     // 忽略设置读取失败
   }
