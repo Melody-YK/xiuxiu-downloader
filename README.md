@@ -1,157 +1,116 @@
-# 嗅嗅下载器（IDM 平替）
+# 嗅嗅下载器（Xiuxiu Downloader）
 
-仓库：https://github.com/Melody-YK/xiuxiu-downloader
+开源 IDM 平替：**浏览器扩展嗅探 + 桌面端多线程下载**。捕获网页中的视频/音频/HLS/DASH 地址，多线程分段下载、断点续传、限速；支持流媒体合并为 MP4（含 AES-128 解密、B站音视频轨合并）。名字由来：小狗一嗅，视频到手 🐶
 
-浏览器扩展（捕获媒体地址）+ 桌面端（多线程下载 / 流媒体合并）。当前处于 **Phase 1：MVP 嗅探扩展** 阶段。
+## 特性
+
+- 🕵️ **三层捕获**：DOM 扫描（视频旁「⬇ 下载」悬浮按钮）、webRequest 网络嗅探、fetch/XHR Hook（对付 MSE 动态站点）
+- 🚀 **多线程下载**：HTTP Range 分段 + IDM 式动态切分、断点续传、令牌桶限速、不支持 Range 自动降级单线程
+- 🎬 **流媒体**：HLS(m3u8)/DASH(mpd)/B站 playurl → 分片下载 → ffmpeg 合并 MP4；支持 AES-128 解密、fMP4、字节范围、无清单分片流
+- 🖥️ **Electron GUI**：任务队列、实时进度/速度、扩展捕获一键下载（自动携带 Cookie/Referer/UA）、下载历史持久化
+- 🔗 **扩展 ↔ 桌面端联动**：native messaging（Chrome 官方协议）+ 本地 HTTP 推送，点击网页按钮直达桌面端开始下载
 
 ## 架构
 
-[网页] --chrome.webRequest--> [MV3 扩展] 捕获媒体 URL + 请求信息
-                                   |  （Phase 2：native messaging，stdio + 长度前缀 JSON）
-                                   v
-                         [桌面端 Node 程序] Range 多线程下载 / m3u8-mpd 合并
+[网页] ─捕获─▶ [MV3 扩展] ─native messaging─▶ [桌面宿主 host.mjs]
+  │ DOM/webRequest/Hook        (stdio+长度前缀JSON)      │ HTTP 127.0.0.1:17321
+  └─────────────▶ [Electron GUI] ◀───────────────────────┘
+                       │
+                       ├─ lib/downloader.mjs   Range 多线程下载核心
+                       ├─ lib/pipeline.mjs    HLS/DASH/B站 流媒体管线
+                       └─ ffmpeg 合并/转封装
 
 ## 目录结构
 
-extension/   MV3 扩展（Chrome/Edge 通用）
-  manifest.json / popup.html / popup.css
-  src/        TypeScript 源码（background 捕获 + popup UI + content script 下载按钮 + lib 纯逻辑）
-  tests/      单元测试 + background 冒烟测试（node --test，mock chrome API）
-  dist/       tsc 构建产物（已提交，可直接加载）
-desktop/     桌面端（native messaging 宿主已就绪；下载核心 Phase 3 起）
-  lib/protocol.mjs   消息帧编解码（4 字节小端长度 + JSON）
-  host.mjs / host.bat native messaging 宿主（stdio + stderr/文件日志）
-  register-host.mjs  生成 manifest 并注册 Chrome/Edge 注册表
-  lib/downloader.mjs Range 多线程下载核心（动态切分/续传/限速/降级单线程）
-  cli.mjs            下载器 CLI：node cli.mjs <url> [选项]
-  lib/hls.mjs        HLS 解析（master 变体/媒体清单/AES-128/EXT-X-MAP/byterange）
-  lib/dash.mjs       DASH 最小解析（SegmentTemplate + SegmentTimeline）
-  lib/segments.mjs   分片下载（并发 + AES-128 解密 + fMP4 初始化段前置）
-  lib/merge.mjs      分片合并 + ffmpeg 转封装
-  media-cli.mjs      流媒体 CLI：node media-cli.mjs <m3u8|mpd> [-o out.mp4]
-  lib/pipeline.mjs   流媒体管线（CLI 与 GUI 共用）
-  lib/queue.mjs      下载任务队列（并发限制/取消/进度事件）
-  gui/               Electron GUI（主进程/预加载/渲染层，npm run gui）
-  tests/             协议 + 宿主 + 下载器 + 流媒体 + 队列测试（35 个，全部通过）
+extension/   MV3 扩展（Chrome/Edge 通用，TypeScript）
+desktop/     桌面端（纯 Node 核心 + Electron GUI，零第三方运行时依赖）
+  lib/       下载核心 / 流媒体管线 / 任务队列 / 协议编解码
+  gui/       Electron 界面
+  cli.mjs / media-cli.mjs   命令行工具
 
-## 环境
+## 快速开始（Windows）
 
-Node v22.19.0 / npm 10.9.3 / git 2.49.0；ffmpeg 已安装（Phase 4 使用）。
-原环境使用 pnpm，本环境未安装，改用 npm；脚本为通用 npm 脚本，后续可随时切回 pnpm。
+前置要求：**Node.js ≥ 22**、**ffmpeg**（加入 PATH）、**Edge 或 Chrome**
 
-## 阶段进度
+1. 克隆仓库
+2. 启动桌面端：
+   ```powershell
+   cd desktop
+   npm install
+   npm run gui
+   ```
+3. 构建并加载扩展：
+   ```powershell
+   cd extension
+   npm install
+   npm run build
+   ```
+   浏览器打开扩展管理页（Edge: `edge://extensions`，Chrome: `chrome://extensions`）→ 开启「开发人员模式」→「加载解压缩的扩展」→ 选择 `extension` 目录
+4. 注册桌面宿主（扩展 ↔ 桌面端通信，只需一次）：
+   ```powershell
+   cd desktop
+   npm run register
+   ```
 
-- [x] **Phase 1：MVP 嗅探扩展**（已完成，待验收）
-- [x] **Phase 2：native messaging 桥**（已完成，待验收）
-- [x] **Phase 3：多线程下载核心**（已完成，待验收）
-- [x] **Phase 4：流媒体**（m3u8/mpd → 分片 → AES-128 解密 → ffmpeg 合并 mp4，已完成待验收）
-- [x] **Phase 5：GUI（Electron）**（已完成，待验收）
+## 使用
 
-## Phase 1 验证步骤（Edge）
+| 场景 | 操作 |
+|---|---|
+| 直链下载 | GUI 粘贴/拖入 URL，多线程自动加速 |
+| 视频旁按钮 | 直链 mp4/webm 站点播放后，视频左上角点「⬇ 下载」直达桌面端 |
+| 流媒体（m3u8/mpd） | 播放视频 → 点扩展图标 → 捕获列表选 HLS/DASH 条目 → 「发送到桌面端」→ GUI 下载 |
+| B站 | 播放 → 扩展列表选**带视频标题**的 DASH 条目 → 下载（音视频轨自动合并，需登录 Cookie 时扩展自动携带） |
+| 请求头透传 | GUI「扩展捕获」一键下载自动带 Cookie/Referer/UA，防盗链站点不再 403 |
 
-1. 加载扩展：edge://extensions → 打开「开发人员模式」→「加载解压缩的扩展」→ 选择本仓库的 extension/ 目录。
-   （Chrome 同理：chrome://extensions）
-2. 打开测试页并播放几秒：
-   - 直链视频：https://test-videos.co.uk/vids/bigbuckbunny/mp4_h264/1080/Big_Buck_Bunny_1080_10s_1MB.mp4
-   - HLS 播放页：https://test-streams.mux.dev/ （页面内 hls.js 播放器会自动请求 m3u8 与 ts 分片）
-3. 点击工具栏扩展图标，popup 应列出捕获到的媒体 URL（类型徽标 + 大小 + 来源页面）。
-   点击「复制」复制单条，「复制全部」复制所有 URL，「清空」重置列表。
-4. 若列表为空：点击「刷新」，或重新加载网页再播放一次（扩展安装前已建立的连接不被观察，需要新请求）。
+命令行：
 
-预期结果：视频页捕获到「视频」条目；HLS 播放页捕获到「HLS」清单条目，且「分片 ×N」随播放增长。
-
-## Phase 2 验证步骤（native messaging 桥）
-
-1. 注册宿主：cd desktop && npm run register（无需依赖；生成 native-host-manifest.json 并写入 Chrome/Edge 两条注册表路径）
-2. Edge 重新加载扩展（manifest 新增了 nativeMessaging 权限）：edge://extensions → 扩展卡片上点「重新加载」
-3. 打开测试视频页重新播放几秒（让请求经过新增的请求头监听，条目带上 Cookie/Referer/UA）
-4. popup 点「发送到桌面端」：按钮应显示「已发送 N 条」
-5. 查看 desktop/host.log（或手动运行 node desktop/host.mjs 观察控制台）：每条 URL + Cookie/Referer/UA 应被打印
-
-常见问题：按钮显示「宿主未注册」→ 先执行 npm run register；「宿主连接失败」→ 检查 node 在系统 PATH（宿主由浏览器启动，继承浏览器进程的环境变量）。
-
-## Phase 3 使用与验证（多线程下载核心）
-
+```powershell
 cd desktop
+node cli.mjs <url> -o 文件 -n 8 -l 4096                 # 直链多线程下载（-n 线程 -l 限速KB/s）
+node media-cli.mjs <m3u8|mpd 地址> -o out.mp4 --list    # 流媒体下载 / 列清晰度
+node media-cli.mjs <B站 playurl 地址> -o out.mp4        # B站音视频轨合并
+```
 
-# 多线程下载（默认 8 连接，自动动态切分）
-node cli.mjs https://proof.ovh.net/files/100Mb.dat -o 100MB.bin -n 8
-# 单线程对照
-node cli.mjs https://proof.ovh.net/files/100Mb.dat -o 100MB-single.bin -n 1 --fresh
-# 限速 4MB/s
-node cli.mjs <url> -o out.bin -n 8 -l 4096
-# 透传请求头（避免 403）
-node cli.mjs <url> --cookie "..." --referer "..." -u "UA"
-# 中断续传：下载中途 Ctrl+C 或关窗口，再次运行相同命令自动续传（<out>.meta.json 记录每段进度）
+## 测试
 
-验收点（自动化测试已覆盖并全部通过）：
-1. 多线程提速：受控限速服务器上单线程约 2s → 4 线程约 0.5s（可测量提速）；本机带宽饱和时两者接近属正常
-2. 断点续传：中断后再次运行从断点恢复，最终文件与完整下载 SHA256 一致（公开文件实测通过）
-3. 服务器不支持/忽略 Range 时自动降级单线程并正常完成；连接中途断开自动重试
+双端自动化测试（本地服务器全链路，含提速/续传/限速/解密/合并等）：
 
-## Phase 4 使用与验证（流媒体）
+```powershell
+cd extension && npm test    # 27 个用例
+cd desktop && npm test      # 44 个用例
+```
 
+## 打包 exe
+
+```powershell
 cd desktop
+npm run pack               # electron-builder portable 单文件（需可访问 GitHub 下载打包组件）
+npx electron-builder --win dir   # 网络受限时的替代：生成目录版，dist/win-unpacked 内 exe 双击即用
+```
 
-node media-cli.mjs https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8 -o x36xhzz.mp4
-node media-cli.mjs https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8 -o bipbop.mp4
-node media-cli.mjs <清单地址> --list      # 列出 master 全部清晰度
-node media-cli.mjs <清单地址> --variant 1 # 选第 2 档清晰度
-node media-cli.mjs <清单地址> --cookie "..." --referer "..."   # 透传请求头
+## 已知限制
 
-能力：HLS(m3u8，含 AES-128 解密/字节范围/fMP4 初始化段)、DASH(mpd，SegmentTemplate)、B站 playurl 接口（自动解析音视频轨并多线程下载合并）；DRM 明确不支持。
-B站用法：播放视频 → popup 捕获列表里选「DASH」徽标的 playurl 接口条目 → 发送到桌面端 → GUI「扩展捕获」标签点下载（自动带 Cookie/Referer）。注意：单个 .m4s/.ts 是分片不是完整流，不可直接下载；高清晰度/大会员需要登录 Cookie。
-已实测：mux.dev TS 流、Apple AES-128 加密流、Apple fMP4 流，输出均可用 ffprobe 验证为 h264 mp4。
+- **DRM**（Widevine/PlayReady）明确不支持
+- **blob:/MSE 站点**（如 YouTube）不显示视频旁按钮，但 popup 捕获列表仍可用
+- **无清单分片流站点**：分片地址随播放被捕获，需完整播放（可静音+倍速）后再下载；部分站点分片带时效签名
+- 商店政策：请勿以「下载付费平台视频」为卖点分发本扩展
 
-## Phase 5 使用（Electron GUI）
+## 常见问题
 
-cd desktop
-npm install       # 首次需要（安装 electron）
-npm run gui       # 启动图形界面
-
-功能：粘贴/拖入 URL 下载（自动识别直链与 m3u8/mpd）、任务队列与进度/速度显示、取消、打开文件位置、限速与线程数设置；
-「扩展捕获」标签实时接收扩展推送，一键下载自动带上 Cookie/Referer/UA；下载历史持久化（重启后仍可见）。
-
-### IDM 式体验（网页内下载按钮）
-
-1. Edge 重新加载扩展（新增了 content script）
-2. 保持 GUI 运行（npm run gui）
-3. 打开任意含 <video>/<audio> 直链的网页（如 https://test-videos.co.uk/bigbuckbunny/mp4-h264 点开一个视频）
-4. 视频左上角出现蓝色「⬇ 下载」按钮 → 点击 → 按钮变「✓ 已发送」→ GUI 自动开始下载（自动带上 Cookie/Referer/UA）
-
-（MSE/blob 流如 B站/YouTube 不显示按钮——video 标签里只有 blob:；此时用「第 3 层 Hook」：扩展会向页面主世界注入 fetch/XHR 拦截，动态请求的 m3u8/mpd/flv 分片地址会出现在 popup 捕获列表里，可「发送到桌面端」下载。DRM 流除外）
-
-自检：npm run gui -- --smoke（无窗口，验证 渲染层加载 + 模拟捕获推送端到端）
+| 现象 | 处理 |
+|---|---|
+| 扩展「发送到桌面端」提示宿主连接失败 | 执行 `cd desktop && npm run register`；确认 node 已安装 |
+| 下载 403 | 从「扩展捕获」列表点下载自动携带请求头，而不是手动粘贴 URL |
+| 分片流提示「分片不连续」 | 拖动进度条会跳过中间分片；从头完整播放后再下载 |
+| 改动扩展代码后无效果 | 重新 `npm run build` 并在扩展管理页点「重新加载」 |
 
 ## 开发
 
-cd extension
-npm install        # 安装 typescript / @types/chrome
-npm run build      # 编译 src → dist（改动源码后需重新 build，再在浏览器里点「重新加载」）
-npm run watch      # 持续编译
-npm test           # 单元 + 冒烟测试（pretest 会自动先 build）
+```powershell
+cd extension && npm run build      # 扩展编译（dist/ 已提交，可直接加载）
+cd desktop && npm run gui          # 开发模式启动 GUI（-- --smoke 为无窗口自检）
+```
 
-# 桌面端（desktop/，无第三方依赖）
-npm run download -- <url> [-o 文件] [-n 线程] [-l KB/s] [--cookie C] [--referer R] [-u UA]
-npm run media -- <m3u8|mpd 地址> [-o out.mp4] [-n 线程] [--variant N] [--list]
-npm run gui                # Electron 图形界面（-- --smoke 为无窗口自检）
-npm run register    # 注册 native messaging 宿主（Chrome/Edge 注册表）
-npm run unregister  # 注销
-npm test            # 协议 + 宿主 + 下载器测试
+## 许可证
 
-> dist/ 是构建产物，已提交以便直接加载；修改 src/ 后请重新构建并提交。
-
-## 关键边界
-
-- MV3 webRequest 只能观察、不能拦截——对嗅探场景无影响。
-- 当前仅捕获 http(s) 媒体请求；blob:/MSE 流（如 YouTube）需后续 Hook 层。
-- DRM（Widevine/PlayReady）明确不支持；m3u8 的 AES-128 属于可解密范围（Phase 4）。
-- 扩展声明 <all_urls> 权限，安装时的权限警告属正常现象。
-- nativeMessaging 权限同样有安装警告，属正常；宿主注册在 HKCU（当前用户），卸载用 desktop 的 npm run unregister。
-
-## 测试资源
-
-- 大文件测速：https://speed.hetzner.de/1GB.bin 、https://proof.ovh.net/files/100Mb.dat
-- HLS：https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
-- Apple 示例流：https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8
-- 直链视频：https://test-videos.co.uk/bigbuckbunny/mp4-h264
+暂未选择许可证；欢迎提 Issue / PR 讨论。
