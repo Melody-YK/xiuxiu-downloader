@@ -1,5 +1,5 @@
 // Electron 主进程：窗口 + IPC + 扩展捕获接收（host.mjs 通过 http://127.0.0.1:17321/ingest 推送）
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, shell, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } from 'electron';
 import { execFile } from 'node:child_process';
 import { createServer, request } from 'node:http';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
@@ -25,11 +25,17 @@ const PRESETS = {
   aggressive: { maxConcurrent: 4, defaultThreads: 16 },
   conservative: { maxConcurrent: 1, defaultThreads: 4 },
 };
-const settings = { mode: 'balanced', maxConcurrent: 2, defaultThreads: 8, closeToTray: true, launchAtLogin: false, notifyDone: true, seenGuide: false };
+const settings = { mode: 'balanced', maxConcurrent: 2, defaultThreads: 8, closeToTray: true, launchAtLogin: false, notifyDone: true, seenGuide: false, clipboardWatch: true };
 let win = null;
 let tray = null;
 let trayNotified = false;
+let trayActive = false;
+let trayLastUpdate = 0;
 let isQuitting = false;
+let clipWin = null;
+let clipLastText = '';
+let clipTimer = null;
+const clipSeen = new Map();
 let historyPath = '';
 let settingsPath = '';
 let historyTimer = null;
@@ -57,6 +63,8 @@ if (!gotLock) {
         if (typeof raw?.launchAtLogin === 'boolean') settings.launchAtLogin = raw.launchAtLogin;
         if (typeof raw?.notifyDone === 'boolean') settings.notifyDone = raw.notifyDone;
         if (typeof raw?.seenGuide === 'boolean') settings.seenGuide = raw.seenGuide;
+        if (typeof raw?.clipboardWatch === 'boolean') settings.clipboardWatch = raw.clipboardWatch;
+        startClipboardWatch();
         if (typeof raw?.maxConcurrent === 'number') settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(raw.maxConcurrent)));
         if (typeof raw?.defaultThreads === 'number') settings.defaultThreads = Math.max(1, Math.min(32, Math.round(raw.defaultThreads)));
         applyLaunchAtLogin();
@@ -210,13 +218,8 @@ function quitApp() {
 
 function createTray() {
   if (tray !== null || smoke) return;
-  // 多分辨率托盘图标：避免 512px 大图缩放成 16px 后发糊
-  const icon = nativeImage.createEmpty();
-  icon.addRepresentation({ scaleFactor: 1.0, buffer: readFileSync(join(here, '..', 'build', 'tray-16.png')) });
-  icon.addRepresentation({ scaleFactor: 1.5, buffer: readFileSync(join(here, '..', 'build', 'tray-24.png')) });
-  icon.addRepresentation({ scaleFactor: 2.0, buffer: readFileSync(join(here, '..', 'build', 'tray-32.png')) });
-  tray = new Tray(icon);
-  tray.setToolTip('嗅嗅下载器');
+  tray = new Tray(trayIcon(false));
+  updateTrayStatus();
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
@@ -238,6 +241,122 @@ function createTray() {
       win.focus();
     }
   });
+}
+
+// 多分辨率托盘图标（active=绿色「下载中」变样）
+function trayIcon(active) {
+  const img = nativeImage.createEmpty();
+  const names = ['tray-16', 'tray-24', 'tray-32'];
+  const scales = [1.0, 1.5, 2.0];
+  for (let i = 0; i < names.length; i += 1) {
+    img.addRepresentation({
+      scaleFactor: scales[i],
+      buffer: readFileSync(join(here, '..', 'build', names[i] + (active ? '-active' : '') + '.png')),
+    });
+  }
+  return img;
+}
+
+function fmtSpeed(bps) {
+  if (typeof bps !== 'number' || !Number.isFinite(bps) || bps <= 0) return '—';
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  let v = bps;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return (v >= 100 ? String(Math.round(v)) : v.toFixed(1)) + ' ' + units[i];
+}
+
+// 托盘状态：空闲蓝图标；有任务绿色图标 + 悬浮显示任务数与实时速度（1s 节流）
+function updateTrayStatus() {
+  if (tray === null) return;
+  const running = jobs.getSnapshot().filter((t) => t.status === 'running');
+  const active = running.length > 0;
+  const now = Date.now();
+  if (now - trayLastUpdate < 1000 && active === trayActive) return;
+  trayLastUpdate = now;
+  if (active !== trayActive) {
+    trayActive = active;
+    tray.setImage(trayIcon(active));
+  }
+  if (active) {
+    const speed = running.reduce((s, t) => s + (typeof t.progress?.speed === 'number' && Number.isFinite(t.progress.speed) ? t.progress.speed : 0), 0);
+    tray.setToolTip('嗅嗅下载器\n下载中 ' + running.length + ' 个任务 · ' + fmtSpeed(speed));
+  } else {
+    tray.setToolTip('嗅嗅下载器\n空闲');
+  }
+}
+
+// ---- 剪贴板监听：复制下载链接弹「要下载吗」小窗 ----
+function startClipboardWatch() {
+  if (clipTimer !== null) {
+    clearInterval(clipTimer);
+    clipTimer = null;
+  }
+  if (!settings.clipboardWatch || smoke) return;
+  clipTimer = setInterval(() => {
+    try {
+      const text = clipboard.readText().trim();
+      if (text === '' || text === clipLastText || text.length > 4000) return;
+      clipLastText = text;
+      for (const m of text.matchAll(/https?:\/\/[^\s"'<>]+/g)) maybePromptClipUrl(m[0]);
+    } catch {
+      // 剪贴板被占用等异常：忽略
+    }
+  }, 900);
+}
+
+function maybePromptClipUrl(raw) {
+  const url = raw.replace(/[.,;:!?)\]，。；：！？）]+$/, '');
+  if (!/^https?:\/\//i.test(url)) return;
+  const now = Date.now();
+  if (clipSeen.has(url) && now - clipSeen.get(url) < 6 * 3600 * 1000) return;
+  const snap = jobs.getSnapshot();
+  if (snap.some((t) => t.url === url && ['running', 'queued', 'done'].includes(t.status))) return;
+  clipSeen.set(url, now);
+  if (clipSeen.size > 400) {
+    const oldest = clipSeen.keys().next().value;
+    if (oldest !== undefined) clipSeen.delete(oldest);
+  }
+  showClipPopup(url);
+}
+
+function showClipPopup(url) {
+  if (win === null || win.isDestroyed()) return;
+  if (clipWin === null || clipWin.isDestroyed()) {
+    clipWin = new BrowserWindow({
+      width: 380,
+      height: 138,
+      frame: false,
+      resizable: false,
+      movable: false,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      show: false,
+      webPreferences: {
+        preload: join(here, 'preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    clipWin.setAlwaysOnTop(true, 'pop-up-menu');
+    clipWin.on('closed', () => {
+      clipWin = null;
+    });
+  }
+  void clipWin.loadFile(join(here, 'renderer', 'clip-popup.html'), { query: { url } });
+  const wa = screen.getPrimaryDisplay().workArea;
+  clipWin.setPosition(wa.x + wa.width - 380 - 12, wa.y + wa.height - 138 - 12);
+  clipWin.showInactive();
+  setTimeout(() => {
+    try {
+      if (clipWin !== null && !clipWin.isDestroyed() && clipWin.isVisible()) clipWin.close();
+    } catch {
+      // 忽略
+    }
+  }, 20000);
 }
 
 function startIngestServer() {
@@ -475,7 +594,30 @@ ipcMain.handle('util:chooseSavePath', async (_e, opts) => {
   });
   return r.canceled ? null : r.filePath;
 });
-ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot(), captures }));
+ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot().map(augmentTask), captures }));
+ipcMain.handle('task:pause', (_e, id) => jobs.pause(Number(id)));
+ipcMain.handle('task:resume', (_e, id) => jobs.resume(Number(id)));
+ipcMain.handle('clip:close', () => {
+  try {
+    if (clipWin !== null && !clipWin.isDestroyed()) clipWin.close();
+  } catch {
+    // 忽略
+  }
+});
+ipcMain.handle('util:showMain', () => {
+  if (win !== null && !win.isDestroyed()) {
+    win.show();
+    win.focus();
+  }
+});
+
+// 任务快照附加「是否存在续传点」（.meta.json），供渲染层显示可续传标记
+function augmentTask(t) {
+  return {
+    ...t,
+    hasMeta: typeof t.out === 'string' && t.out !== '' ? existsSync(t.out + '.meta.json') : false,
+  };
+}
 ipcMain.handle('settings:get', () => ({ ...settings }));
 ipcMain.handle('settings:set', async (_e, opts) => {
   if (typeof opts?.closeToTray === 'boolean') settings.closeToTray = opts.closeToTray;
@@ -485,6 +627,10 @@ ipcMain.handle('settings:set', async (_e, opts) => {
   }
   if (typeof opts?.notifyDone === 'boolean') settings.notifyDone = opts.notifyDone;
   if (typeof opts?.seenGuide === 'boolean') settings.seenGuide = opts.seenGuide;
+  if (typeof opts?.clipboardWatch === 'boolean') {
+    settings.clipboardWatch = opts.clipboardWatch;
+    startClipboardWatch();
+  }
   if (typeof opts?.mode === 'string' && PRESETS[opts.mode] !== undefined) {
     const v = PRESETS[opts.mode];
     settings.mode = opts.mode;
@@ -516,11 +662,19 @@ function applyLaunchAtLogin() {
 }
 
 jobs.on('event', (ev) => {
-  if (win !== null && !win.isDestroyed()) win.webContents.send('task:event', ev);
+  if (win !== null && !win.isDestroyed()) {
+    // 状态类事件附加续传点信息；进度事件原样透传（避免高频 stat）
+    if ((ev.type === 'status' || ev.type === 'created') && ev.data !== undefined) {
+      win.webContents.send('task:event', { ...ev, data: augmentTask(ev.data) });
+    } else {
+      win.webContents.send('task:event', ev);
+    }
+  }
   if (!smoke) scheduleSaveHistory();
   if (settings.notifyDone && ev.type === 'status' && (ev.data?.status === 'done' || ev.data?.status === 'error')) {
     notifyTaskDone(ev.data);
   }
+  updateTrayStatus();
 });
 
 // 下载完成/失败系统通知：点击打开文件位置
@@ -555,7 +709,7 @@ function scheduleSaveHistory() {
     historyTimer = null;
     const finished = jobs
       .getSnapshot()
-      .filter((t) => t.status === 'done' || t.status === 'error' || t.status === 'canceled')
+      .filter((t) => t.status === 'done' || t.status === 'error' || t.status === 'canceled' || t.status === 'paused')
       .slice(-200);
     writeFile(historyPath, JSON.stringify(finished), 'utf8').catch(() => {});
   }, 800);

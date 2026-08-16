@@ -25,9 +25,13 @@ jobs:
           npm run build
           npm test
 
-      - name: 扩展：打包 zip（供手动加载）
+      - name: 扩展：打包 zip（只含运行时文件，供手动加载）
         shell: pwsh
-        run: tar -a -c -f extension.zip -C extension --exclude=node_modules .
+        run: |
+          New-Item -ItemType Directory -Path dist-ext | Out-Null
+          Copy-Item extension\manifest.json, extension\popup.html, extension\popup.css, extension\page-hook.js dist-ext\
+          Copy-Item extension\dist dist-ext\dist -Recurse
+          tar -a -c -f extension.zip -C dist-ext .
 
       - name: 桌面端：测试
         shell: pwsh
@@ -36,11 +40,18 @@ jobs:
           npm install
           npm test
 
-      - name: 桌面端：打包 portable exe
+      - name: 桌面端：打包 portable exe（单文件便携版）
         shell: pwsh
         run: |
           cd desktop
           npx electron-builder --win portable
+
+      - name: 桌面端：打包免安装目录版（win-unpacked zip）
+        shell: pwsh
+        run: |
+          cd desktop
+          npx electron-builder --win dir
+          tar -a -c -f xiuxiu-desktop-dir.zip -C dist win-unpacked
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
@@ -48,6 +59,7 @@ jobs:
           name: xiuxiu-build
           path: |
             desktop/dist/*-portable.exe
+            desktop/xiuxiu-desktop-dir.zip
             extension.zip
 
       - name: 发布 Release（仅 tag 触发）
@@ -56,5 +68,6 @@ jobs:
         with:
           files: |
             desktop/dist/*-portable.exe
+            desktop/xiuxiu-desktop-dir.zip
             extension.zip
           generate_release_notes: true

@@ -47,7 +47,7 @@ const selAllCk = document.getElementById('sel-all');
 const selCountEl = document.getElementById('sel-count');
 const sel = new Set();
 
-const STATUS_LABEL = { queued: '排队中', running: '下载中', done: '已完成', error: '失败', canceled: '已取消' };
+const STATUS_LABEL = { queued: '排队中', running: '下载中', done: '已完成', error: '失败', canceled: '已取消', paused: '已暂停' };
 const TYPE_LABEL = { video: '视频', audio: '音频', hls: 'HLS', dash: 'DASH', ts: '分片', stream: '分片流' };
 
 function switchTab(which) {
@@ -68,6 +68,7 @@ const customFields = document.getElementById('custom-fields');
 const sTrayEl = document.getElementById('s-tray');
 const sLaunchEl = document.getElementById('s-launch');
 const sNotifyEl = document.getElementById('s-notify');
+const sClipEl = document.getElementById('s-clip');
 const PRESETS = {
   balanced: { maxConcurrent: 2, defaultThreads: 8 },
   aggressive: { maxConcurrent: 4, defaultThreads: 16 },
@@ -107,6 +108,9 @@ sLaunchEl.addEventListener('change', () => {
 });
 sNotifyEl.addEventListener('change', () => {
   void bridge.setSettings({ notifyDone: sNotifyEl.checked });
+});
+sClipEl.addEventListener('change', () => {
+  void bridge.setSettings({ clipboardWatch: sClipEl.checked });
 });
 
 // ---- 首次使用指引 ----
@@ -290,6 +294,11 @@ function buildTaskRow() {
   ops.className = 't-ops';
   const cancelBtn = document.createElement('button');
   cancelBtn.textContent = '取消';
+  const pauseBtn = document.createElement('button');
+  pauseBtn.textContent = '暂停';
+  const resumeBtn = document.createElement('button');
+  resumeBtn.textContent = '继续';
+  resumeBtn.className = 'primary';
   const openBtn = document.createElement('button');
   openBtn.textContent = '打开位置';
   const delBtn = document.createElement('button');
@@ -297,7 +306,7 @@ function buildTaskRow() {
   const delFileBtn = document.createElement('button');
   delFileBtn.textContent = '删除记录和文件';
   delFileBtn.className = 'danger';
-  ops.append(cancelBtn, openBtn, delBtn, delFileBtn);
+  ops.append(pauseBtn, resumeBtn, cancelBtn, openBtn, delBtn, delFileBtn);
 
   row.append(head, meta, barWrap, ops);
 
@@ -308,6 +317,8 @@ function buildTaskRow() {
       name.textContent = fileNameOf(t.url);
       name.title = t.url;
       cancelBtn.onclick = () => void bridge.cancelTask(t.id);
+      pauseBtn.onclick = () => void bridge.pauseTask(t.id);
+      resumeBtn.onclick = () => void bridge.resumeTask(t.id);
       openBtn.onclick = () => void bridge.openFolder(t.out);
       delBtn.onclick = () => void bridge.removeTask(t.id);
       delFileBtn.onclick = () => {
@@ -336,6 +347,9 @@ function buildTaskRow() {
           bar.style.width = Math.min(100, pct).toFixed(1) + '%';
         }
       }
+      if (t.hasMeta === true && (t.status === 'paused' || t.status === 'error' || t.status === 'canceled')) {
+        parts.push('有续传点，可直接继续');
+      }
       if (t.status === 'error' && t.error !== null) {
         parts.push(
           t.error.includes('403')
@@ -346,10 +360,15 @@ function buildTaskRow() {
       if (t.status === 'done') parts.push(t.out);
       meta.textContent = parts.join(' · ');
       meta.title = parts.join(' · ');
+      pauseBtn.hidden = !(t.status === 'queued' || t.status === 'running');
+      resumeBtn.hidden = !(t.status === 'paused' || t.status === 'error' || t.status === 'canceled');
+      resumeBtn.textContent = t.status === 'paused' ? '继续' : '重试';
+      resumeBtn.title = '保留已下载部分，从续传点继续';
       cancelBtn.hidden = !(t.status === 'queued' || t.status === 'running');
       openBtn.hidden = t.status !== 'done';
       delBtn.hidden = t.status === 'running';
       delFileBtn.hidden = t.status === 'running';
+      delFileBtn.title = '删除记录和文件（含续传点 .meta.json）';
     },
   };
 }
@@ -472,6 +491,7 @@ void (async () => {
     sTrayEl.checked = s.closeToTray !== false;
     sLaunchEl.checked = s.launchAtLogin === true;
     sNotifyEl.checked = s.notifyDone !== false;
+    sClipEl.checked = s.clipboardWatch !== false;
     if (s.seenGuide !== true) void showGuide();
   } catch {
     // 忽略设置读取失败

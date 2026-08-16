@@ -4,6 +4,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   addTask: (task) => ipcRenderer.invoke('task:add', task),
   cancelTask: (id) => ipcRenderer.invoke('task:cancel', id),
+  pauseTask: (id) => ipcRenderer.invoke('task:pause', id),
+  resumeTask: (id) => ipcRenderer.invoke('task:resume', id),
+  closeClip: () => ipcRenderer.invoke('clip:close'),
+  showMain: () => ipcRenderer.invoke('util:showMain'),
   removeTask: (id) => ipcRenderer.invoke('task:remove', id),
   removeTasks: (ids, withFiles) => ipcRenderer.invoke('task:removeMany', { ids, withFiles }),
   removeAllTasks: (withFiles) => ipcRenderer.invoke('task:removeAll', { withFiles }),

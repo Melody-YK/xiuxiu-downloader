@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>剪贴板下载</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+      background: #fff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      overflow: hidden;
+      user-select: none;
+    }
+    .head { padding: 10px 12px 4px; font-size: 13px; font-weight: 600; color: #24292f; }
+    .url {
+      padding: 0 12px;
+      font-size: 12px;
+      color: #57606a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .acts { display: flex; gap: 8px; padding: 10px 12px 12px; }
+    button {
+      flex: 1;
+      padding: 7px 0;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button.primary { background: #0969da; border-color: #0969da; color: #fff; }
+    button.primary:hover { background: #0550ae; }
+  </style>
+</head>
+<body>
+  <div class="head">检测到下载链接，要下载吗？</div>
+  <div class="url" id="u"></div>
+  <div class="acts">
+    <button type="button" id="ignore">忽略</button>
+    <button type="button" id="go" class="primary">下载</button>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const url = params.get('url') ?? '';
+    document.getElementById('u').textContent = url;
+    document.getElementById('u').title = url;
+    document.getElementById('ignore').addEventListener('click', () => window.api.closeClip());
+    document.getElementById('go').addEventListener('click', () => {
+      if (url !== '') window.api.addTask({ url, kind: 'auto' });
+      window.api.closeClip();
+    });
+  </script>
+</body>
+</html>

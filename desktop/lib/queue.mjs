@@ -95,6 +95,7 @@ export class JobManager extends EventEmitter {
       createdAt: Date.now(),
       finishedAt: null,
       abort: null,
+      pausedByUser: false,
     };
     this.tasks.set(id, t);
     this.queue.push(id);
@@ -110,6 +111,44 @@ export class JobManager extends EventEmitter {
     if (t.status === 'queued') this.queue = this.queue.filter((x) => x !== id);
     this.tasks.delete(id);
     this.emit('event', { id, type: 'removed', data: { id } });
+    return true;
+  }
+
+  /** 暂停：运行中→中止并标记 paused（保留续传点）；排队中→直接移出队列 */
+  pause(id) {
+    const t = this.tasks.get(id);
+    if (t === undefined) return false;
+    if (t.status === 'running') {
+      if (t.abort !== null) {
+        t.pausedByUser = true;
+        t.abort.abort();
+      }
+      return true;
+    }
+    if (t.status === 'queued') {
+      this.queue = this.queue.filter((x) => x !== id);
+      t.status = 'paused';
+      t.finishedAt = Date.now();
+      this.emit('event', { id, type: 'status', data: this.snapshotOf(t) });
+      return true;
+    }
+    return false;
+  }
+
+  /** 继续：暂停/失败任务重新入队（.meta.json 续传点保留，自动续传） */
+  resume(id) {
+    const t = this.tasks.get(id);
+    if (t === undefined) return false;
+    if (t.status !== 'paused' && t.status !== 'error' && t.status !== 'canceled') return false;
+    t.status = 'queued';
+    t.error = null;
+    t.phase = '';
+    t.progress = null;
+    t.finishedAt = null;
+    t.pausedByUser = false;
+    this.queue.push(id);
+    this.emit('event', { id, type: 'status', data: this.snapshotOf(t) });
+    this.pump();
     return true;
   }
 
@@ -139,18 +178,21 @@ export class JobManager extends EventEmitter {
         id: it.id,
         url: it.url ?? '',
         out: it.out ?? '',
-        headers: {},
+        headers: it.headers !== undefined && it.headers !== null && typeof it.headers === 'object' ? it.headers : {},
         kind: it.kind ?? 'auto',
         isMedia: it.isMedia === true,
-        threads: 8,
-        limitBytesPerSec: undefined,
-        status: it.status === 'error' || it.status === 'canceled' ? it.status : 'done',
+        streamUrls: Array.isArray(it.streamUrls) ? it.streamUrls : undefined,
+        threads: typeof it.threads === 'number' ? it.threads : 8,
+        adaptiveConnections: it.adaptiveConnections === true,
+        limitBytesPerSec: typeof it.limitBytesPerSec === 'number' ? it.limitBytesPerSec : undefined,
+        status: it.status === 'error' || it.status === 'canceled' || it.status === 'paused' ? it.status : 'done',
         progress: null,
         phase: it.phase ?? '',
         error: it.error ?? null,
         createdAt: it.createdAt ?? Date.now(),
         finishedAt: it.finishedAt ?? null,
         abort: null,
+        pausedByUser: false,
       };
       this.tasks.set(t.id, t);
       this.nextId = Math.max(this.nextId, t.id + 1);
@@ -170,6 +212,11 @@ export class JobManager extends EventEmitter {
       error: t.error,
       createdAt: t.createdAt,
       finishedAt: t.finishedAt,
+      headers: t.headers,
+      threads: t.threads,
+      streamUrls: t.streamUrls,
+      limitBytesPerSec: t.limitBytesPerSec,
+      adaptiveConnections: t.adaptiveConnections,
     };
   }
 
@@ -216,6 +263,7 @@ export class JobManager extends EventEmitter {
           },
         });
       } else {
+        // 不强制 fresh：.meta.json 存在时自动续传（暂停/继续、断点恢复的关键）
         const dl = new Downloader({
           url: t.url,
           out: t.out,
@@ -224,7 +272,6 @@ export class JobManager extends EventEmitter {
           limitBytesPerSec: t.limitBytesPerSec,
           adaptiveConnections: t.adaptiveConnections,
           signal: abort.signal,
-          fresh: true,
           onProgress: (p) => {
             t.progress = { completed: p.completed, total: p.total, speed: p.speed, unit: 'bytes' };
             this.emit('event', { id: t.id, type: 'progress', data: this.snapshotOf(t) });
@@ -237,11 +284,12 @@ export class JobManager extends EventEmitter {
       t.progress = null;
     } catch (err) {
       t.finishedAt = Date.now();
-      if (abort.signal.aborted) t.status = 'canceled';
+      if (abort.signal.aborted) t.status = t.pausedByUser ? 'paused' : 'canceled';
       else {
         t.status = 'error';
         t.error = err?.message ?? String(err);
       }
+      t.pausedByUser = false;
     }
     this.emit('event', { id: t.id, type: 'status', data: this.snapshotOf(t) });
   }

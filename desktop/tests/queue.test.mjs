@@ -21,8 +21,8 @@ function patternByte(pos) {
   return (pos * 31 + 7) & 0xff;
 }
 
-// 静态文件服务器（支持 Range 与每块延迟）
-function startServer(files, delayMs = 0) {
+// 静态文件服务器（支持 Range 与每块延迟；rangeDelayMs>0 时 Range 响应也逐块慢发，供暂停测试）
+function startServer(files, delayMs = 0, rangeDelayMs = 0) {
   const server = createServer((req, res) => {
     res.on('error', () => {});
     req.on('error', () => {});
@@ -38,7 +38,24 @@ function startServer(files, delayMs = 0) {
       const s = Number(m[1]);
       const e = Math.min(Number(m[2]), buf.length - 1);
       const slice = buf.subarray(s, e + 1);
-      res.writeHead(206, { 'Content-Range': 'bytes ' + s + '-' + e + '/' + buf.length, 'Content-Length': String(slice.length) });
+      res.writeHead(206, { 'Content-Range': 'bytes ' + s + '-' + e + '/' + buf.length, 'Content-Length': String(slice.length), 'Accept-Ranges': 'bytes' });
+      if (rangeDelayMs > 0) {
+        const parts = [];
+        for (let i = 0; i < slice.length; i += 16 * 1024) parts.push(slice.subarray(i, i + 16 * 1024));
+        let i = 0;
+        const push = () => {
+          if (res.destroyed || res.writableEnded) return;
+          if (i >= parts.length) {
+            res.end();
+            return;
+          }
+          res.write(parts[i]);
+          i += 1;
+          setTimeout(push, rangeDelayMs);
+        };
+        push();
+        return;
+      }
       res.end(slice);
       return;
     }
@@ -46,7 +63,7 @@ function startServer(files, delayMs = 0) {
       const parts = [];
       for (let i = 0; i < buf.length; i += 64 * 1024) parts.push(buf.subarray(i, i + 64 * 1024));
       let i = 0;
-      res.writeHead(200, { 'Content-Length': String(buf.length) });
+      res.writeHead(200, { 'Content-Length': String(buf.length), 'Accept-Ranges': 'bytes' });
       const push = () => {
         if (res.destroyed || res.writableEnded) return; // 客户端中断后停止，避免挂起
         if (i >= parts.length) {
@@ -60,7 +77,7 @@ function startServer(files, delayMs = 0) {
       push();
       return;
     }
-    res.writeHead(200, { 'Content-Length': String(buf.length) });
+    res.writeHead(200, { 'Content-Length': String(buf.length), 'Accept-Ranges': 'bytes' });
     res.end(buf);
   });
   return new Promise((resolve) => {
@@ -286,4 +303,59 @@ test('media 任务：mpd SegmentTemplate → mp4（需 ffmpeg）', { skip: !hasF
   assert.equal(probe.status, 0);
   assert.ok(probe.stdout.includes('h264'));
   server.close();
+});
+
+test('暂停与继续：运行中暂停落盘续传点，继续后完成且内容一致', async () => {
+  const src = makeFile(2 * 1024 * 1024);
+  // Range 响应逐块慢发：留出下载中窗口，保证暂停时确实有未完成部分
+  const { base, server } = await startServer({ 'f.bin': src }, 0, 12);
+  const jobs = new JobManager({ maxConcurrent: 1 });
+  const out = join(TMP, 'pause1.bin');
+  const id = jobs.add({ url: base + 'f.bin', out, kind: 'file', threads: 2 });
+  await waitFor(() => jobs.getSnapshot()[0]?.status === 'running');
+  await sleep(400);
+  assert.equal(jobs.pause(id), true, '暂停运行中任务');
+  await waitFor(() => jobs.getSnapshot()[0]?.status === 'paused');
+  const meta = out + '.meta.json';
+  await waitFor(() => stat(meta).then(() => true).catch(() => false), 10000);
+  // 文件预分配为全长，进度看 meta 里各段的 cursor：应有「已下一部分」的段
+  const st = JSON.parse(await readFile(meta, 'utf8'));
+  const segs = Array.isArray(st.segments) ? st.segments : [];
+  assert.ok(segs.some((s) => s.cursor > 0 && s.cursor < s.end), '应有部分完成的段');
+  assert.equal(jobs.resume(id), true, '继续');
+  await waitFor(() => jobs.getSnapshot()[0]?.status === 'done', 20000);
+  assert.equal((await readFile(out)).equals(src), true, '继续完成后内容应一致');
+  server.close();
+});
+
+test('暂停排队任务：移出队列变 paused，可继续', async () => {
+  const src = makeFile(256 * 1024);
+  const { base, server } = await startServer({ 'f.bin': src }, 40);
+  const jobs = new JobManager({ maxConcurrent: 1 });
+  const outA = join(TMP, 'pa.bin');
+  const outB = join(TMP, 'pb.bin');
+  const idA = jobs.add({ url: base + 'f.bin', out: outA, kind: 'file', threads: 1 });
+  const idB = jobs.add({ url: base + 'f.bin', out: outB, kind: 'file', threads: 1 });
+  await waitFor(() => jobs.getSnapshot().find((t) => t.id === idA)?.status === 'running');
+  assert.equal(jobs.pause(idB), true, '暂停排队任务');
+  assert.equal(jobs.getSnapshot().find((t) => t.id === idB)?.status, 'paused');
+  assert.equal(jobs.resume(idB), true, '继续排队任务');
+  await waitFor(() => jobs.getSnapshot().every((t) => t.status === 'done'), 20000);
+  assert.equal((await readFile(outA)).equals(src), true);
+  assert.equal((await readFile(outB)).equals(src), true);
+  server.close();
+});
+
+test('暂停后历史恢复：paused 快照保留 headers/threads 且可继续', async () => {
+  const jobs = new JobManager({ maxConcurrent: 1 });
+  jobs.restoreHistory([
+    { id: 5, url: 'https://a.com/v.mp4', out: join(TMP, 'x.bin'), kind: 'file', isMedia: false, status: 'paused', headers: { Cookie: 'c=1' }, threads: 4 },
+  ]);
+  const s = jobs.getSnapshot()[0];
+  assert.equal(s.status, 'paused');
+  assert.equal(s.headers.Cookie, 'c=1');
+  assert.equal(s.threads, 4);
+  assert.equal(jobs.resume(5), true, '恢复历史中的暂停任务');
+  assert.notEqual(jobs.getSnapshot()[0].status, 'paused', '应离开暂停态');
+  jobs.cancel(5); // 清理，避免假地址任务残留
 });
