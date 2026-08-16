@@ -194,7 +194,11 @@ function upsertTask(t) {
 // ---- 扩展捕获列表 ----
 function renderCaptures() {
   capturesEl.replaceChildren();
-  const visible = state.captures.filter((c) => c.mediaType !== 'ts');
+  const visible = state.captures.filter(
+    (c) =>
+      c.mediaType !== 'ts' &&
+      !(c.mediaType === 'dash' && (c.pageTitle ?? '') === '' && /bilibili\.com\//.test(c.url)),
+  );
   if (visible.length === 0) {
     capturesEl.textContent = '暂无捕获。在扩展 popup 点「发送到桌面端」。';
     return;

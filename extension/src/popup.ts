@@ -88,11 +88,19 @@ async function readEntries(): Promise<Entry[]> {
   return Array.isArray(entries) ? (entries as Entry[]) : [];
 }
 
-async function render(): Promise<void> {
+// 展示与发送共用的条目准备：过滤分片、隐藏无标题的 B站 playurl 条目、补全标题
+async function prepareEntries(): Promise<Entry[]> {
   const all = await readEntries();
-  // 隐藏不可下载的分片条目（ts 类型），分片计数已聚合在 HLS/DASH 条目上
   let entries = all.filter((e) => e.type !== 'ts');
   entries = await enrichBiliTitles(entries);
+  // 补全之后再隐藏：无标题的 B站 playurl 条目是推荐预览视频，不展示
+  const isBili = (e: Entry): boolean => (e.dedupeKey ?? '').startsWith('bili:') || /bilibili\.com\//.test(e.url);
+  entries = entries.filter((e) => !(isBili(e) && e.pageTitle === ''));
+  return entries;
+}
+
+async function render(): Promise<void> {
+  const entries = await prepareEntries();
   listEl.replaceChildren();
   countEl.textContent = String(entries.length) + ' 条';
   void updateDebugInfo();
@@ -182,7 +190,7 @@ async function copyRow(btn: HTMLButtonElement, text: string): Promise<void> {
 }
 
 async function copyAll(): Promise<void> {
-  const entries = await readEntries();
+  const entries = await prepareEntries();
   if (entries.length === 0) return;
   const ok = await copyText(entries.map((e) => e.url).join('\n'));
   flashButton(copyAllBtn, ok ? '✓ 已复制' : '复制失败');
@@ -262,7 +270,7 @@ function formatTime(ts: number): string {
 }
 
 async function sendToDesktop(): Promise<void> {
-  const entries = await readEntries();
+  const entries = await prepareEntries();
   if (entries.length === 0) {
     flashButton(sendBtn, '无记录可发送');
     return;

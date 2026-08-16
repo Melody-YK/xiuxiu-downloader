@@ -153,10 +153,10 @@ export function bvidFromPlayurl(url: string): string {
 /** B站页面尚未加载视频信息时的默认标签页标题（视为无效标题） */
 export const BILI_DEFAULT_TITLE = '哔哩哔哩 (゜-゜)つロ 干杯~-bilibili';
 
-/** 清理 B站标签页标题：去后缀；默认标题视为空 */
+/** 清理 B站标签页标题：去掉 _哔哩哔哩 起的各种后缀（含分区后缀如 _哔哩哔哩bilibili_王者荣耀）；默认标题视为空 */
 export function cleanBiliTitle(t: string): string {
-  const s = t.replace(/_哔哩哔哩_bilibili\s*$/i, '').trim();
-  return s === BILI_DEFAULT_TITLE || s === '' ? '' : s;
+  const s = t.replace(/_哔哩哔哩[\s\S]*$/, '').trim();
+  return s === '' || s === BILI_DEFAULT_TITLE ? '' : s;
 }
 
 export function bvidFromPageUrl(url: string): string {
