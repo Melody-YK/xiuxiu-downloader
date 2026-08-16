@@ -27,6 +27,19 @@ function segIndexOf(u) {
 async function downloadStream(opts) {
   const { out, headers = {}, connections = 8, keep = false, signal, onProgress = () => {}, onPhase = () => {} } = opts;
   const urls = [...opts.streamUrls].sort((a, b) => segIndexOf(a) - segIndexOf(b));
+  // 空洞检测：索引不连续说明有分片未被请求（如拖动进度条跳过），硬拼会产出坏文件
+  const indices = urls.map(segIndexOf);
+  const uniqueIdx = new Set(indices).size === indices.length;
+  if (uniqueIdx && indices.length > 1) {
+    for (let i = 1; i < indices.length; i += 1) {
+      if (indices[i] !== indices[i - 1] + 1) {
+        throw new Error(
+          '分片不连续（缺失 ' + (indices[i - 1] + 1) + '..' + (indices[i] - 1) +
+          '），无法完整拼接。请从头完整播放后再下载（可倍速+静音；拖动进度条不会补齐中间分片）',
+        );
+      }
+    }
+  }
   onPhase('分片流: ' + urls.length + ' 个分片' + (opts.truncated === true ? '（已截断，仅前段）' : ''));
   const workDir = join(dirname(out), basename(out) + '.parts');
   await rm(workDir, { recursive: true, force: true });

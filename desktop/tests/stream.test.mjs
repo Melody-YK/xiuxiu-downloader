@@ -17,6 +17,23 @@ test.after(async () => {
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 
+test('分片流：空洞检测拒绝下载（拖动进度条导致的缺失）', async () => {
+  const urls = ['seg_00001.mp4', 'seg_00002.mp4', 'seg_00005.mp4'].map((f) => 'http://127.0.0.1:1/' + f);
+  await assert.rejects(
+    () =>
+      downloadMedia({
+        url: urls[0],
+        out: join(TMP, 'gap.mp4'),
+        headers: {},
+        connections: 1,
+        streamUrls: urls,
+        onPhase: () => {},
+        onProgress: () => {},
+      }),
+    /分片不连续/,
+  );
+});
+
 test('分片流 E2E：连续 mp4 分片 → 按序拼接 → mp4 可播放（需 ffmpeg）', { skip: !hasFfmpeg }, async () => {
   const dir = join(TMP, 'e2e');
   await mkdir(dir, { recursive: true });
