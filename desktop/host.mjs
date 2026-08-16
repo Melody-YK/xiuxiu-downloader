@@ -62,6 +62,9 @@ process.stdin.on('error', (err) => {
 });
 
 // 若 GUI（Electron）在运行，把捕获推给它（127.0.0.1 HTTP）；未运行则静默忽略（仅保留日志）
+// GUI 端口可用环境变量覆盖（测试用独立端口，避免污染真实 GUI）
+const GUI_PORT = Number(process.env.XIUXIU_GUI_PORT ?? 17321) || 17321;
+
 function forwardToGui(entries, autoDownload) {
   const payload = Buffer.from(
     JSON.stringify({ type: 'capture', entries, autoDownload: autoDownload === true }),
@@ -70,7 +73,7 @@ function forwardToGui(entries, autoDownload) {
   const req = request(
     {
       host: '127.0.0.1',
-      port: 17321,
+      port: GUI_PORT,
       path: '/ingest',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length },

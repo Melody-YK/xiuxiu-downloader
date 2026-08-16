@@ -210,6 +210,7 @@ export function applyCapture(state, cap) {
         state.segmentKeys.push(key);
         if (state.segmentKeys.length > MAX_SEGMENT_KEYS)
             state.segmentKeys.shift();
+        // 已有 hls/dash 清单宿主：分片只计数，不进列表
         const host = findSegmentHost(state, cap.tabId, cap.ext ?? 'ts');
         if (host !== null) {
             host.segmentCount += 1;
@@ -217,13 +218,54 @@ export function applyCapture(state, cap) {
             moveToFront(state, host);
             return { changed: 'segmented', entry: host };
         }
-        const standalone = state.entries.find((e) => e.tabId === cap.tabId && e.type === 'ts');
-        if (standalone !== undefined) {
-            standalone.segmentCount += 1;
-            standalone.lastSeenAt = at;
-            moveToFront(state, standalone);
-            return { changed: 'segmented', entry: standalone };
+        // 无清单宿主：按 groupKey 聚成「分片流」条目；完全无法归类的孤立分片直接丢弃
+        // （孤立分片会刷屏，且多为短期签名地址，单独下载无意义、下载也会失败）
+        if (cap.groupKey !== undefined && cap.groupKey !== null && cap.groupKey !== '') {
+            let grouped = state.entries.find((e) => e.tabId === cap.tabId && e.groupKey === cap.groupKey && (e.type === 'stream' || e.type === 'ts'));
+            if (grouped === undefined) {
+                const entry = {
+                    id: state.nextId,
+                    type: 'stream',
+                    url: cap.url,
+                    tabId: cap.tabId,
+                    pageUrl: cap.pageUrl ?? '',
+                    pageTitle: cap.pageTitle ?? '',
+                    contentType: cap.contentType,
+                    ext: cap.ext ?? null,
+                    headers: cap.headers ?? null,
+                    dedupeKey: null,
+                    groupKey: cap.groupKey,
+                    size: cap.size ?? null,
+                    segmentCount: 1,
+                    createdAt: at,
+                    lastSeenAt: at,
+                };
+                entry.segmentUrls = [cap.url];
+                state.nextId += 1;
+                state.entries.unshift(entry);
+                if (state.entries.length > MAX_ENTRIES)
+                    state.entries.length = MAX_ENTRIES;
+                return { changed: 'added', entry };
+            }
+            if (grouped.type === 'ts') {
+                // 旧版本遗留的独立 ts 条目：升级为分片流
+                grouped.type = 'stream';
+                grouped.segmentUrls = [grouped.url];
+            }
+            if (grouped.segmentUrls === undefined)
+                grouped.segmentUrls = [];
+            if (!grouped.segmentUrls.includes(cap.url)) {
+                if (grouped.segmentUrls.length >= MAX_SEGMENT_URLS)
+                    grouped.truncated = true;
+                else
+                    grouped.segmentUrls.push(cap.url);
+                grouped.segmentCount = grouped.segmentUrls.length;
+            }
+            grouped.lastSeenAt = at;
+            moveToFront(state, grouped);
+            return { changed: 'segmented', entry: grouped };
         }
+        return { changed: 'ignored' };
     }
     const entry = {
         id: state.nextId,
@@ -238,7 +280,7 @@ export function applyCapture(state, cap) {
         dedupeKey: cap.dedupeKey ?? null,
         groupKey: cap.groupKey ?? null,
         size: cap.size ?? null,
-        segmentCount: cap.type === 'ts' ? 1 : 0,
+        segmentCount: 0,
         createdAt: at,
         lastSeenAt: at,
     };

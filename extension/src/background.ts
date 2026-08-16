@@ -250,32 +250,65 @@ async function handleContentDownload(
       referer: entry?.headers?.referer ?? '',
       userAgent: entry?.headers?.userAgent ?? '',
     };
-    const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
-    const ok = await new Promise<boolean>((resolve) => {
-      let done = false;
-      const finish = (v: boolean): void => {
-        if (done) return;
-        done = true;
-        resolve(v);
-        try {
-          port.disconnect();
-        } catch {
-          // 忽略
-        }
-      };
-      port.onMessage.addListener((m: unknown) => {
-        if (typeof m === 'object' && m !== null && (m as { type?: unknown }).type === 'ack') finish(true);
+    const nativeError = await tryNativeSend([payload], true);
+    if (nativeError === null) {
+      sendResponse({ ok: true });
+      return;
+    }
+    // 原生通道失败：直连桌面端本地端口兜底
+    try {
+      const res = await fetch(GUI_INGEST_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'capture', entries: [payload], autoDownload: true }),
       });
-      port.onDisconnect.addListener(() => {
-        if (chrome.runtime.lastError !== undefined) finish(false);
-      });
-      port.postMessage({ type: 'capture', entries: [payload], autoDownload: true });
-      setTimeout(() => finish(false), 3000);
-    });
-    sendResponse({ ok });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      sendResponse({ ok: true });
+      return;
+    } catch {
+      sendResponse({ ok: false, error: nativeError + '；直连桌面端失败，请先启动嗅嗅下载器' });
+    }
   } catch {
-    sendResponse({ ok: false, error: '宿主未连接' });
+    sendResponse({ ok: false, error: '发送失败' });
   }
+}
+
+const GUI_INGEST_URL = 'http://127.0.0.1:17321/ingest';
+
+/** 通过原生消息发送捕获；成功返回 null，失败返回可读原因 */
+function tryNativeSend(entries: unknown[], autoDownload: boolean): Promise<string | null> {
+  return new Promise((resolve) => {
+    let port: chrome.runtime.Port;
+    try {
+      port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+    } catch {
+      resolve('宿主未注册');
+      return;
+    }
+    let done = false;
+    const finish = (v: string | null): void => {
+      if (done) return;
+      done = true;
+      resolve(v);
+      try {
+        port.disconnect();
+      } catch {
+        // 忽略
+      }
+    };
+    port.onMessage.addListener((m: unknown) => {
+      if (typeof m === 'object' && m !== null && (m as { type?: unknown }).type === 'ack') finish(null);
+    });
+    port.onDisconnect.addListener(() => {
+      if (chrome.runtime.lastError !== undefined) {
+        finish('宿主连接失败: ' + (chrome.runtime.lastError.message ?? '未知错误'));
+      } else {
+        finish('宿主连接中断');
+      }
+    });
+    port.postMessage({ type: 'capture', entries, autoDownload });
+    setTimeout(() => finish('宿主无响应'), 3000);
+  });
 }
 
 async function getPageInfo(tabId: number, fallbackUrl: string): Promise<{ url: string; title: string }> {

@@ -9,5 +9,8 @@ desktop/*.ts
 desktop/*.parts/
 desktop/output.mp4
 desktop/dist/
+desktop/host-launcher.exe
+desktop/test-*.bin
+desktop/test-*.txt
 发布版/
 desktop/发布版/

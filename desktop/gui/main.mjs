@@ -1,6 +1,7 @@
 // Electron 主进程：窗口 + IPC + 扩展捕获接收（host.mjs 通过 http://127.0.0.1:17321/ingest 推送）
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
 import { createServer, request } from 'node:http';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
@@ -202,8 +203,12 @@ function quitApp() {
 
 function createTray() {
   if (tray !== null || smoke) return;
-  const icon = nativeImage.createFromPath(join(here, '..', 'build', 'icon.png'));
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  // 多分辨率托盘图标：避免 512px 大图缩放成 16px 后发糊
+  const icon = nativeImage.createEmpty();
+  icon.addRepresentation({ scaleFactor: 1.0, buffer: readFileSync(join(here, '..', 'build', 'tray-16.png')) });
+  icon.addRepresentation({ scaleFactor: 1.5, buffer: readFileSync(join(here, '..', 'build', 'tray-24.png')) });
+  icon.addRepresentation({ scaleFactor: 2.0, buffer: readFileSync(join(here, '..', 'build', 'tray-32.png')) });
+  tray = new Tray(icon);
   tray.setToolTip('嗅嗅下载器');
   tray.setContextMenu(
     Menu.buildFromTemplate([
@@ -253,6 +258,24 @@ function startIngestServer() {
       }
       pruneCaptures();
       for (const e of entries) {
+        // 捕获日志：方便排查「这是什么文件」（userData/captures.log，制表符分隔）
+        try {
+          appendFileSync(
+            join(app.getPath('userData'), 'captures.log'),
+            [
+              new Date().toISOString(),
+              e.mediaType ?? 'video',
+              e.size ?? '',
+              e.contentType ?? '',
+              e.url ?? '',
+              e.pageUrl ?? '',
+              e.pageTitle ?? '',
+            ].join('\t') + '\n',
+            'utf8',
+          );
+        } catch {
+          // 日志失败不影响主流程
+        }
         captures.unshift({
           url: e.url ?? '',
           mediaType: e.mediaType ?? 'video',

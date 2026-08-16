@@ -79,13 +79,22 @@ test('applyCapture：ts 分片聚合到 hls 清单，重复分片去重', () => 
   assert.equal(state.segmentKeys.length, 2);
 });
 
-test('applyCapture：无清单时 ts 聚合为独立条目', () => {
+test('applyCapture：无清单时 ts 按 groupKey 聚合为分片流', () => {
   const state = createEmptyState();
-  applyCapture(state, cap({ url: 'https://a.com/s1.ts', type: 'ts' }));
-  applyCapture(state, cap({ url: 'https://a.com/s2.ts', type: 'ts' }));
+  const r1 = applyCapture(state, cap({ url: 'https://a.com/s1.ts', type: 'ts', groupKey: segmentGroupKey('https://a.com/s1.ts') }));
+  assert.equal(r1.changed, 'added');
+  assert.equal(state.entries[0].type, 'stream');
+  applyCapture(state, cap({ url: 'https://a.com/s2.ts', type: 'ts', groupKey: segmentGroupKey('https://a.com/s2.ts') }));
   assert.equal(state.entries.length, 1);
-  assert.equal(state.entries[0].type, 'ts');
   assert.equal(state.entries[0].segmentCount, 2);
+  assert.deepEqual(state.entries[0].segmentUrls, ['https://a.com/s1.ts', 'https://a.com/s2.ts']);
+});
+
+test('applyCapture：无法归类的孤立 ts 分片直接丢弃', () => {
+  const state = createEmptyState();
+  const r = applyCapture(state, cap({ url: 'https://a.com/123456.ts', type: 'ts' }));
+  assert.equal(r.changed, 'ignored');
+  assert.equal(state.entries.length, 0);
 });
 
 test('applyCapture：m4s 优先聚合到 dash 清单', () => {
