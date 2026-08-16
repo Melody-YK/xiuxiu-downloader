@@ -5,8 +5,10 @@ import { join } from 'node:path';
 
 export function decryptAes128(data, key, iv) {
   const d = createDecipheriv('aes-128-cbc', key, iv);
+  // Node 默认会自动剥 PKCS7 填充；这里显式关闭并自行处理（HLS 规范 RFC 8216 要求 PKCS7）
+  d.setAutoPadding(false);
   const out = Buffer.concat([d.update(data), d.final()]);
-  const pad = out[out.length - 1];
+  const pad = out.length > 0 ? out[out.length - 1] : 0;
   if (pad > 0 && pad <= 16) return out.subarray(0, out.length - pad);
   return out;
 }

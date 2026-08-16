@@ -4,3 +4,7 @@ node_modules/
 desktop/native-host-manifest.json
 desktop/*.bin
 desktop/*.meta.json
+desktop/*.mp4
+desktop/*.ts
+desktop/*.parts/
+desktop/output.mp4
