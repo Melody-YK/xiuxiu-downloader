@@ -11,7 +11,7 @@
     "media": "node media-cli.mjs",
     "register": "node register-host.mjs",
     "unregister": "node register-host.mjs --unregister",
-    "test": "node --test tests/protocol.test.mjs tests/host.test.mjs tests/downloader.test.mjs tests/hls.test.mjs tests/dash.test.mjs tests/segments.test.mjs tests/media-e2e.test.mjs tests/queue.test.mjs"
+    "test": "node --test tests/protocol.test.mjs tests/host.test.mjs tests/downloader.test.mjs tests/hls.test.mjs tests/dash.test.mjs tests/segments.test.mjs tests/media-e2e.test.mjs tests/queue.test.mjs tests/bili.test.mjs"
   },
   "devDependencies": {
     "electron": "^43.4.0"

@@ -204,6 +204,26 @@ test('background：hook 注入主世界 + hook 捕获动态 URL（带请求头�
   assert.equal(found.headers?.cookie, 'bili=1', '应按 URL 补全请求头');
 });
 
+test('background：hook 捕获 B站 playurl 接口（无扩展名）为 dash 条目并带 Cookie', async () => {
+  fireSendHeaders({
+    requestId: 'req-bili',
+    tabId: 5,
+    url: 'https://api.bilibili.com/x/player/playurl?bvid=BV1x&cid=1&fnval=16',
+    requestHeaders: [{ name: 'Cookie', value: 'SESSDATA=x' }],
+  });
+  globalThis.chrome.runtime.onMessage._emit(
+    { type: 'hook:url', url: 'https://api.bilibili.com/x/player/playurl?bvid=BV1x&cid=1&fnval=16' },
+    { tab: { id: 5 } },
+    () => {},
+  );
+  await sleep(600);
+  const stored = storageData[STORAGE_KEY];
+  const found = (stored?.entries ?? []).find((x) => x.url.includes('playurl'));
+  assert.ok(found, 'B站接口 URL 应入库');
+  assert.equal(found.type, 'dash');
+  assert.equal(found.headers?.cookie, 'SESSDATA=x');
+});
+
 test('background：popup 清空消息清空状态与存储', async () => {
   let response = null;
   globalThis.chrome.runtime.onMessage._emit({ type: 'clear' }, {}, (v) => {

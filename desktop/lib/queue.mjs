@@ -3,9 +3,10 @@ import { EventEmitter } from 'node:events';
 import { join, resolve } from 'node:path';
 import { Downloader } from './downloader.mjs';
 import { downloadMedia } from './pipeline.mjs';
+import { isBiliPlayurlUrl } from './bili.mjs';
 
 export function isMediaUrl(url) {
-  return /\.(m3u8|mpd)([?#]|$)/i.test(url);
+  return /\.(m3u8|mpd)([?#]|$)/i.test(url) || isBiliPlayurlUrl(url);
 }
 
 export function defaultFileName(url) {
@@ -165,7 +166,12 @@ export class JobManager extends EventEmitter {
             this.emit('event', { id: t.id, type: 'status', data: this.snapshotOf(t) });
           },
           onProgress: (p) => {
-            t.progress = { completed: p.done, total: p.total, unit: 'segments' };
+            t.progress = {
+              completed: p.completed ?? p.done ?? 0,
+              total: p.total ?? null,
+              speed: p.speed ?? undefined,
+              unit: p.unit ?? 'segments',
+            };
             this.emit('event', { id: t.id, type: 'progress', data: this.snapshotOf(t) });
           },
         });

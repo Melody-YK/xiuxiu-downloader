@@ -159,7 +159,13 @@ function buildTaskRow() {
           bar.style.width = Math.min(100, pct).toFixed(1) + '%';
         }
       }
-      if (t.status === 'error' && t.error !== null) parts.push(t.error);
+      if (t.status === 'error' && t.error !== null) {
+        parts.push(
+          t.error.includes('403')
+            ? t.error + '（可能需要请求头：从「扩展捕获」列表点下载会自动携带 Cookie/Referer/UA）'
+            : t.error,
+        );
+      }
       if (t.status === 'done') parts.push(t.out);
       meta.textContent = parts.join(' · ');
       meta.title = parts.join(' · ');
@@ -205,6 +211,10 @@ function renderCaptures() {
     dl.className = 'primary';
     dl.textContent = '下载';
     dl.addEventListener('click', () => {
+      if (c.mediaType === 'ts') {
+        showError('这是单个分片地址，不能直接下载；请在列表里选择 HLS/DASH 清单条目（B站选 playurl 接口条目）');
+        return;
+      }
       const headers = {};
       if (c.cookie) headers.Cookie = c.cookie;
       if (c.referer) headers.Referer = c.referer;

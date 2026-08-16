@@ -97,7 +97,8 @@ node media-cli.mjs <清单地址> --list      # 列出 master 全部清晰度
 node media-cli.mjs <清单地址> --variant 1 # 选第 2 档清晰度
 node media-cli.mjs <清单地址> --cookie "..." --referer "..."   # 透传请求头
 
-能力：HLS(m3u8，含 AES-128 解密/字节范围/fMP4 初始化段) 与 DASH(mpd，SegmentTemplate)；DRM 明确不支持。
+能力：HLS(m3u8，含 AES-128 解密/字节范围/fMP4 初始化段)、DASH(mpd，SegmentTemplate)、B站 playurl 接口（自动解析音视频轨并多线程下载合并）；DRM 明确不支持。
+B站用法：播放视频 → popup 捕获列表里选「DASH」徽标的 playurl 接口条目 → 发送到桌面端 → GUI「扩展捕获」标签点下载（自动带 Cookie/Referer）。注意：单个 .m4s/.ts 是分片不是完整流，不可直接下载；高清晰度/大会员需要登录 Cookie。
 已实测：mux.dev TS 流、Apple AES-128 加密流、Apple fMP4 流，输出均可用 ffprobe 验证为 h264 mp4。
 
 ## Phase 5 使用（Electron GUI）

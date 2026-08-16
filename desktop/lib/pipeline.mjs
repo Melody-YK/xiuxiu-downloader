@@ -1,10 +1,69 @@
 // 流媒体下载管线（CLI 与 GUI 共用）：清单解析 → 分片下载 → 合并 → ffmpeg 转封装
 import { basename, dirname, join } from 'node:path';
-import { rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { parseMasterPlaylist, parseMediaPlaylist } from './hls.mjs';
 import { parseMpd, probeSegmentCount } from './dash.mjs';
 import { downloadSegments } from './segments.mjs';
-import { concatFiles, ffmpegRemux } from './merge.mjs';
+import { concatFiles, ffmpegMuxAV, ffmpegRemux } from './merge.mjs';
+import { Downloader } from './downloader.mjs';
+import { isBiliPlayurlUrl, parseBiliPlayurl } from './bili.mjs';
+
+const BILI_DEFAULT_HEADERS = {
+  Referer: 'https://www.bilibili.com/',
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+};
+
+async function downloadBili(opts) {
+  const { url, out, headers = {}, connections = 8, keep = false, signal, onProgress = () => {}, onPhase = () => {} } = opts;
+  const h = { ...BILI_DEFAULT_HEADERS, ...headers };
+  onPhase('请求 B站播放地址接口');
+  const res = await fetch(url, { headers: h, redirect: 'follow', signal });
+  if (!res.ok) {
+    throw new Error('B站接口请求失败: HTTP ' + res.status + (res.status === 403 ? '（可能被风控，需登录 Cookie）' : ''));
+  }
+  const json = await res.json();
+  const parsed = parseBiliPlayurl(json);
+  const workDir = join(dirname(out), basename(out) + '.parts');
+  await rm(workDir, { recursive: true, force: true });
+  await mkdir(workDir, { recursive: true });
+
+  try {
+    if (parsed.kind === 'flv') {
+      onPhase('flv 单轨下载');
+      const dl = new Downloader({ url: parsed.url, out: join(workDir, 'video.flv'), headers: h, connections, signal, onProgress });
+      await dl.download();
+      onPhase('ffmpeg 转封装');
+      await ffmpegRemux(join(workDir, 'video.flv'), out);
+    } else {
+      const videoPath = join(workDir, 'video.m4s');
+      const audioPath = join(workDir, 'audio.m4s');
+      onPhase('下载视频轨 ' + (parsed.video.codecs || '') + ' ' + (parsed.video.width ?? '') + 'x' + (parsed.video.height ?? ''));
+      const vdl = new Downloader({ url: parsed.video.url, out: videoPath, headers: h, connections, signal, onProgress });
+      await vdl.download();
+      if (parsed.audio !== null) {
+        onPhase('下载音频轨');
+        const adl = new Downloader({
+          url: parsed.audio.url,
+          out: audioPath,
+          headers: h,
+          connections: Math.max(1, Math.min(4, connections)),
+          signal,
+          onProgress,
+        });
+        await adl.download();
+        onPhase('合并音视频');
+        await ffmpegMuxAV(videoPath, audioPath, out);
+      } else {
+        onPhase('ffmpeg 转封装');
+        await ffmpegRemux(videoPath, out);
+      }
+    }
+    return { out, kind: parsed.kind, segments: 2, label: 'B站' };
+  } finally {
+    if (!keep) await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 export async function downloadMedia(opts) {
   const {
@@ -18,6 +77,8 @@ export async function downloadMedia(opts) {
     onProgress = () => {},
     onPhase = () => {},
   } = opts;
+
+  if (isBiliPlayurlUrl(url)) return downloadBili(opts);
 
   onPhase('请求清单');
   const res = await fetch(url, { headers, redirect: 'follow', signal });

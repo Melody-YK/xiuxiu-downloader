@@ -21,6 +21,18 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
 });
 
+function fmtBytes(n) {
+  if (!Number.isFinite(n)) return '?';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = n;
+  let u = 0;
+  while (v >= 1024 && u < units.length - 1) {
+    v /= 1024;
+    u += 1;
+  }
+  return (v >= 100 || u === 0 ? String(Math.round(v)) : v.toFixed(1)) + ' ' + units[u];
+}
+
 function usage() {
   console.log('用法: node media-cli.mjs <m3u8|mpd 地址> [选项]');
   console.log('  -o, --out <文件>        输出 mp4 路径（默认 output.mp4）');
@@ -32,7 +44,7 @@ function usage() {
   console.log('  -u, --user-agent <str>  请求 User-Agent');
   console.log('      --header "N: V"     自定义请求头（可多次）');
   console.log('      --keep              保留中间分片目录（<out>.parts）');
-  console.log('支持：HLS(m3u8，含 AES-128/字节范围/fMP4) 与 DASH(mpd，SegmentTemplate)；DRM 不支持。');
+  console.log('支持：HLS(m3u8，含 AES-128/字节范围/fMP4)、DASH(mpd，SegmentTemplate)、B站 playurl 接口（自动下载音视频轨合并）；DRM 不支持。');
 }
 
 if (values.help || positionals.length !== 1) {
@@ -93,7 +105,12 @@ try {
     signal: ac.signal,
     onPhase: (s) => console.log(s),
     onProgress: (p) => {
-      process.stdout.write('\r  分片 ' + p.done + '/' + p.total);
+      if (p.unit === 'bytes') {
+        const total = p.total != null ? ' / ' + fmtBytes(p.total) : '';
+        process.stdout.write('\r  ' + fmtBytes(p.completed) + total + '  ' + fmtBytes(p.speed ?? 0) + '/s');
+      } else {
+        process.stdout.write('\r  分片 ' + p.done + '/' + p.total);
+      }
     },
   });
   process.stdout.write('\n');

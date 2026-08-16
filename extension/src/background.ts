@@ -60,6 +60,8 @@ function schedulePersist(): void {
 }
 
 // ---- 请求头嗅探：onBeforeSendHeaders 只读观察（Cookie/Referer/UA 需 extraHeaders） ----
+/** B站播放地址接口（无媒体扩展名，但必须透传请求头） */
+const BILI_PLAYURL_RE = /bilibili\.com\/(x\/player\/playurl|pgc\/player\/web\/playurl)/i;
 const headerCache = new Map<string, RequestHeaders>();
 /** URL 级请求头（tabId|url），供 hook 层按 URL 补全透传头 */
 const headersByUrl = new Map<string, RequestHeaders>();
@@ -69,7 +71,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
     if (details.tabId < 0) return;
     const url = details.url ?? '';
     if (!/^https?:\/\//i.test(url)) return;
-    if (extOf(url) === null) return; // 仅缓存疑似媒体请求，避免全量开销
+    if (extOf(url) === null && !BILI_PLAYURL_RE.test(url)) return; // 仅缓存疑似媒体请求，避免全量开销
     const h = extractRequestHeaders(details.requestHeaders ?? []);
     if (h.cookie !== undefined || h.referer !== undefined || h.userAgent !== undefined) {
       headerCache.set(details.requestId, h);
@@ -167,8 +169,9 @@ async function applyHookUrl(url: string, sender: chrome.runtime.MessageSender): 
     if (!/^https?:\/\//i.test(url)) return;
     const tabId = sender.tab?.id ?? -1;
     if (tabId < 0) return;
+    const isBili = BILI_PLAYURL_RE.test(url);
     const cls = classify(url, '');
-    if (!cls.isMedia || cls.type === null) return;
+    if (!isBili && (!cls.isMedia || cls.type === null)) return;
     const key = keyOf(tabId, url);
     const headers = headersByUrl.get(key);
     if (headers !== undefined) headersByUrl.delete(key);
@@ -176,7 +179,7 @@ async function applyHookUrl(url: string, sender: chrome.runtime.MessageSender): 
       url,
       tabId,
       contentType: '',
-      type: cls.type,
+      type: isBili ? 'dash' : (cls.type ?? 'video'),
       ext: cls.ext,
       headers,
     });

@@ -7,11 +7,12 @@
   window.__SNIFFER_HOOKED__ = true;
 
   var MEDIA_RE = /\.(m3u8|mpd|mp4|webm|flv|f4v|m4s|m4a|m4v|ts|mp3|aac|ogg|wav|mov|avi|mkv|opus|flac)(?:[?#]|$)/i;
+  var BILI_RE = /bilibili\.com\/(x\/player\/playurl|pgc\/player\/web\/playurl)/i;
   var seen = {};
 
   function report(url) {
     if (typeof url !== 'string' || url === '' || url.indexOf('http') !== 0) return;
-    if (!MEDIA_RE.test(url)) return;
+    if (!MEDIA_RE.test(url) && !BILI_RE.test(url)) return;
     if (seen[url]) return;
     seen[url] = true;
     try {
