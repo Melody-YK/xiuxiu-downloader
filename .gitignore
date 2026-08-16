@@ -9,4 +9,5 @@ desktop/*.ts
 desktop/*.parts/
 desktop/output.mp4
 desktop/dist/
+发布版/
 desktop/发布版/

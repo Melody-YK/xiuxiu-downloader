@@ -24,6 +24,7 @@
       <label class="radio"><input type="radio" name="mode" value="aggressive"> <b>激进</b><span class="desc">同时 4 个任务、每任务 16 线程——一次下很多东西时把带宽拉满</span></label>
       <label class="radio"><input type="radio" name="mode" value="conservative"> <b>保守</b><span class="desc">同时 1 个任务、每任务 4 线程——网络不稳或服务器脆弱时更稳妥</span></label>
       <label class="radio"><input type="radio" name="mode" value="custom"> <b>自定义</b><span class="desc">自己指定数值</span></label>
+      <div class="hdr-row"><label for="s-tray">关闭窗口时</label><label class="ck"><input type="checkbox" id="s-tray" checked> 最小化到托盘继续下载<span class="desc">右键托盘图标可退出</span></label></div>
       <div id="custom-fields" hidden>
         <div class="hdr-row"><label>同时任务数 (1-8)</label><input id="s-max" type="number" min="1" max="8"><span class="desc">同时下载几个任务</span></div>
         <div class="hdr-row"><label>默认线程数 (1-32)</label><input id="s-threads" type="number" min="1" max="32"><span class="desc">每个任务用几个连接；不是越大越好，8-16 通常已足够，超过带宽上限还可能被服务器限速</span></div>
@@ -36,14 +37,14 @@
         <option value="file">直链</option>
         <option value="media">流媒体</option>
       </select>
-      <input id="f-threads" type="number" min="1" max="32" value="8" title="线程数：该任务用几个连接下载">
-      <label class="ck"><input type="checkbox" id="f-auto" checked> 自动调节</label>
-      <input id="f-limit" type="number" min="0" step="64" value="0" title="限速：限制该任务下载速度（KB/s），0 = 不限速">
+      <span class="field"><label for="f-threads">线程数</label><input id="f-threads" type="number" min="1" max="32" value="8"></span>
+      <label class="ck" title="检测到服务器按连接数限速时自动降级重试"><input type="checkbox" id="f-auto" checked> 自动调节</label>
+      <span class="field"><label for="f-limit">限速 KB/s</label><input id="f-limit" type="number" min="0" step="64" value="0"></span>
       <input id="f-out" placeholder="保存路径（默认：下载文件夹）">
       <button type="button" id="f-browse" title="选择保存位置">选择…</button>
       <button type="submit" id="f-add">添加下载</button>
     </form>
-    <p class="form-hint">「线程数」= 该任务用几个连接下载；勾选「自动调节」后，检测到服务器按连接数限速（429/403/连接被掐）会自动降级重试。「限速」= 限制该任务速度（KB/s），0 为不限。</p>
+    <div class="form-hint">ℹ <span>线程数 = 该任务用几个连接下载；勾选「自动调节」后，检测到服务器按连接限速（429/403/连接被掐）会自动降级重试。限速 = 限制该任务速度（KB/s），0 为不限速。</span></div>
     <details id="f-headers">
       <summary>请求头（防盗链/登录站点用，可从「扩展捕获」一键带入）</summary>
       <div class="hdr-row"><label>Cookie</label><input id="f-cookie" placeholder="可选"></div>

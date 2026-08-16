@@ -1,6 +1,6 @@
 {
   "name": "@xiuxiu/desktop",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "type": "module",
   "main": "gui/main.mjs",
@@ -18,7 +18,7 @@
   "build": {
     "appId": "com.downloader.sniffer",
     "productName": "嗅嗅下载器",
-    "files": ["gui/**/*", "lib/**/*", "package.json"],
+    "files": ["gui/**/*", "lib/**/*", "build/icon.png", "package.json"],
     "win": { "target": ["portable"], "icon": "build/icon.png" },
     "portable": { "artifactName": "xiuxiu-downloader-${version}-portable.exe" },
     "electronLanguages": ["zh-CN", "en-US"]

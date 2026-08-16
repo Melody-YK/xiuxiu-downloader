@@ -65,6 +65,7 @@ const sMaxEl = document.getElementById('s-max');
 const sThreadsEl = document.getElementById('s-threads');
 const fThreadsEl = document.getElementById('f-threads');
 const customFields = document.getElementById('custom-fields');
+const sTrayEl = document.getElementById('s-tray');
 const PRESETS = {
   balanced: { maxConcurrent: 2, defaultThreads: 8 },
   aggressive: { maxConcurrent: 4, defaultThreads: 16 },
@@ -95,6 +96,9 @@ sMaxEl.addEventListener('change', () => {
 sThreadsEl.addEventListener('change', () => {
   void bridge.setSettings({ mode: 'custom', defaultThreads: Number(sThreadsEl.value) || 8 });
   fThreadsEl.value = String(Number(sThreadsEl.value) || 8);
+});
+sTrayEl.addEventListener('change', () => {
+  void bridge.setSettings({ closeToTray: sTrayEl.checked });
 });
 
 // ---- 添加任务 ----
@@ -406,6 +410,7 @@ void (async () => {
     const mode = PRESETS[s.mode] !== undefined || s.mode === 'custom' ? s.mode : 'balanced';
     for (const el of document.querySelectorAll('input[name="mode"]')) el.checked = el.value === mode;
     customFields.hidden = mode !== 'custom';
+    sTrayEl.checked = s.closeToTray !== false;
   } catch {
     // 忽略设置读取失败
   }

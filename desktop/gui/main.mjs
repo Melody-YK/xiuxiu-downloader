@@ -1,5 +1,5 @@
 // Electron 主进程：窗口 + IPC + 扩展捕获接收（host.mjs 通过 http://127.0.0.1:17321/ingest 推送）
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
 import { createServer, request } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -21,8 +21,11 @@ const PRESETS = {
   aggressive: { maxConcurrent: 4, defaultThreads: 16 },
   conservative: { maxConcurrent: 1, defaultThreads: 4 },
 };
-const settings = { mode: 'balanced', maxConcurrent: 2, defaultThreads: 8 };
+const settings = { mode: 'balanced', maxConcurrent: 2, defaultThreads: 8, closeToTray: true };
 let win = null;
+let tray = null;
+let trayNotified = false;
+let isQuitting = false;
 let historyPath = '';
 let settingsPath = '';
 let historyTimer = null;
@@ -46,6 +49,7 @@ if (!gotLock) {
       try {
         const raw = JSON.parse(await readFile(settingsPath, 'utf8'));
         settings.mode = PRESETS[raw?.mode] !== undefined || raw?.mode === 'custom' ? raw.mode : 'balanced';
+        if (typeof raw?.closeToTray === 'boolean') settings.closeToTray = raw.closeToTray;
         if (typeof raw?.maxConcurrent === 'number') settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(raw.maxConcurrent)));
         if (typeof raw?.defaultThreads === 'number') settings.defaultThreads = Math.max(1, Math.min(32, Math.round(raw.defaultThreads)));
       } catch {
@@ -72,10 +76,24 @@ if (!gotLock) {
       },
     });
     void win.loadFile(join(here, 'renderer', 'index.html'));
-    // 关闭窗口：无任务直接退出；有任务先确认（防止误关丢下载）
+    createTray();
+    // 关闭窗口：托盘模式下最小化到托盘继续下载；否则退出（有任务时先确认）
     win.on('close', (e) => {
-      if (smoke) return;
-      const running = jobs.getSnapshot().filter((t) => t.status === 'running' || t.status === 'queued').length;
+      if (smoke || isQuitting) return;
+      if (settings.closeToTray) {
+        e.preventDefault();
+        win.hide();
+        if (!trayNotified && tray !== null) {
+          trayNotified = true;
+          try {
+            tray.displayBalloon({ title: '嗅嗅下载器', content: '已最小化到托盘，下载继续进行。右键托盘图标可退出。' });
+          } catch {
+            // 通知失败忽略
+          }
+        }
+        return;
+      }
+      const running = runningCount();
       if (running === 0) return;
       e.preventDefault();
       void dialog
@@ -88,10 +106,7 @@ if (!gotLock) {
           message: '有 ' + running + ' 个任务正在进行，退出将中断它们。',
         })
         .then((r) => {
-          if (r.response === 0) {
-            win.destroy();
-            app.exit(0);
-          }
+          if (r.response === 0) quitApp();
         });
     });
     startIngestServer();
@@ -145,8 +160,72 @@ if (!gotLock) {
     }
   });
 
-  // 强制退出：确保关闭窗口后进程彻底结束（不留后台进程）
-  app.on('window-all-closed', () => app.exit(0));
+  // 非托盘模式下：关闭窗口即退出（托盘模式下窗口只是隐藏，不会触发这里）
+  app.on('window-all-closed', () => {
+    if (!settings.closeToTray) app.exit(0);
+  });
+}
+
+function runningCount() {
+  return jobs.getSnapshot().filter((t) => t.status === 'running' || t.status === 'queued').length;
+}
+
+// 退出流程：有任务先确认，然后清理托盘并强制退出
+function quitApp() {
+  if (isQuitting) return;
+  const running = runningCount();
+  const doQuit = () => {
+    isQuitting = true;
+    if (tray !== null) {
+      tray.destroy();
+      tray = null;
+    }
+    app.exit(0);
+  };
+  if (running === 0) {
+    doQuit();
+    return;
+  }
+  void dialog
+    .showMessageBox(win, {
+      type: 'warning',
+      buttons: ['退出并中断', '取消'],
+      defaultId: 1,
+      cancelId: 1,
+      title: '下载任务进行中',
+      message: '有 ' + running + ' 个任务正在进行，退出将中断它们。',
+    })
+    .then((r) => {
+      if (r.response === 0) doQuit();
+    });
+}
+
+function createTray() {
+  if (tray !== null || smoke) return;
+  const icon = nativeImage.createFromPath(join(here, '..', 'build', 'icon.png'));
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  tray.setToolTip('嗅嗅下载器');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: '显示主窗口',
+        click: () => {
+          if (win !== null && !win.isDestroyed()) {
+            win.show();
+            win.focus();
+          }
+        },
+      },
+      { type: 'separator' },
+      { label: '退出', click: () => quitApp() },
+    ]),
+  );
+  tray.on('double-click', () => {
+    if (win !== null && !win.isDestroyed()) {
+      win.show();
+      win.focus();
+    }
+  });
 }
 
 function startIngestServer() {
@@ -312,6 +391,7 @@ ipcMain.handle('util:chooseSavePath', async (_e, opts) => {
 ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot(), captures }));
 ipcMain.handle('settings:get', () => ({ ...settings }));
 ipcMain.handle('settings:set', async (_e, opts) => {
+  if (typeof opts?.closeToTray === 'boolean') settings.closeToTray = opts.closeToTray;
   if (typeof opts?.mode === 'string' && PRESETS[opts.mode] !== undefined) {
     const v = PRESETS[opts.mode];
     settings.mode = opts.mode;

@@ -56,7 +56,21 @@ details#settings-panel input { width: 90px; }
 .setting-hint { color: #57606a; margin: 6px 0; }
 .radio { display: block; padding: 3px 0; cursor: pointer; }
 .radio .desc { display: block; margin-left: 20px; color: #8b949e; font-size: 11px; }
-.form-hint { color: #8b949e; font-size: 11px; margin: 6px 0 0; }
+.field { display: inline-flex; align-items: center; gap: 4px; }
+.field label { color: #57606a; font-size: 12px; white-space: nowrap; }
+.form-hint {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 7px 10px;
+  background: #eef6ff;
+  border: 1px solid #b6d7ff;
+  border-radius: 6px;
+  color: #1f5c99;
+  font-size: 12px;
+  line-height: 1.5;
+}
 details#f-headers summary { cursor: pointer; color: #57606a; }
 .hdr-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .hdr-row label { width: 90px; color: #57606a; }
