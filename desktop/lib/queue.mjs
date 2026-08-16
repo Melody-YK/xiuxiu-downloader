@@ -86,6 +86,7 @@ export class JobManager extends EventEmitter {
       isMedia,
       streamUrls: Array.isArray(task.streamUrls) ? task.streamUrls : undefined,
       threads: task.threads ?? 8,
+      adaptiveConnections: task.adaptiveConnections === true,
       limitBytesPerSec: task.limitBytesPerSec ?? undefined,
       status: 'queued',
       progress: null,
@@ -221,6 +222,7 @@ export class JobManager extends EventEmitter {
           headers: t.headers,
           connections: t.threads,
           limitBytesPerSec: t.limitBytesPerSec,
+          adaptiveConnections: t.adaptiveConnections,
           signal: abort.signal,
           fresh: true,
           onProgress: (p) => {

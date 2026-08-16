@@ -12,11 +12,18 @@ export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** 判断错误是否属于「服务器按连接数限速」一类（用于自适应降级） */
+function isThrottleLike(err) {
+  if (err instanceof DownloadError) return err.status === 429 || err.status === 403 || err.status === 503;
+  return err !== null && err !== undefined && err.name === 'TypeError' && /fetch failed/i.test(String(err.message ?? ''));
+}
+
 export class DownloadError extends Error {
-  constructor(message, code) {
+  constructor(message, code, status = null) {
     super(message);
     this.name = 'DownloadError';
     this.code = code;
+    this.status = status;
   }
 }
 
@@ -84,7 +91,7 @@ export async function probe(url, headers, opts = {}) {
       if (t !== null) total = t;
     }
     if (!res.ok && res.status !== 206) {
-      throw new DownloadError('服务器返回 HTTP ' + res.status, 'PROBE_STATUS');
+      throw new DownloadError('服务器返回 HTTP ' + res.status, 'PROBE_STATUS', res.status);
     }
     try {
       await res.body?.cancel();
@@ -160,6 +167,7 @@ export class Downloader {
       ? new RateLimiter(opts.limitBytesPerSec)
       : null;
     this.fresh = opts.fresh ?? false;
+    this.adaptiveConnections = opts.adaptiveConnections ?? false;
     this.onProgress = opts.onProgress ?? (() => {});
     this.signal = opts.signal ?? null;
     this.metaPath = this.out + '.meta.json';
@@ -183,24 +191,44 @@ export class Downloader {
       return this.downloadSingle(p, !this.fresh && p.total !== null);
     }
     try {
-      return await this.downloadMulti(p);
+      return await (this.adaptiveConnections ? this.runAdaptive(p) : this.downloadMulti(p));
     } catch (err) {
       await this.saveState().catch(() => {});
       throw err;
     }
   }
 
-  async downloadMulti(p) {
+  // 自适应连接：检测到服务器按连接数限速（429/403/503 或连接被重置）时逐步降级重试
+  async runAdaptive(p) {
+    const attempts = [...new Set([this.connections, 4, 2, 1].filter((n) => n <= this.connections && n >= 1))];
+    let lastErr = null;
+    for (let i = 0; i < attempts.length; i += 1) {
+      const n = attempts[i];
+      try {
+        const r = await this.downloadMulti(p, n, i > 0);
+        return { ...r, adaptiveDegraded: n < this.connections };
+      } catch (err) {
+        lastErr = err;
+        if (!isThrottleLike(err)) throw err;
+        console.warn(
+          '[downloader] 疑似服务器按连接数限速，' + n + ' 连接失败，降为 ' + (n === 1 ? '单线程' : Math.max(1, Math.floor(n / 2)) + ' 连接重试'),
+        );
+      }
+    }
+    throw lastErr;
+  }
+
+  async downloadMulti(p, connCount = this.connections, forceFresh = false) {
     // 恢复或初始化分段
     let segments = null;
-    if (!this.fresh) segments = await loadState(this.metaPath, p);
+    if (!this.fresh && !forceFresh) segments = await loadState(this.metaPath, p);
     if (segments === null) {
-      segments = planSegments(p.total, this.connections, this.minSegment);
+      segments = planSegments(p.total, connCount, this.minSegment);
       await this.allocFile(p.total);
     } else {
       const st = await stat(this.out).catch(() => null);
       if (st === null || st.size !== p.total) {
-        segments = planSegments(p.total, this.connections, this.minSegment);
+        segments = planSegments(p.total, connCount, this.minSegment);
         await this.allocFile(p.total);
       }
     }
@@ -229,7 +257,7 @@ export class Downloader {
     };
 
     const workers = [];
-    const nWorkers = Math.min(this.connections, segments.length);
+    const nWorkers = Math.min(connCount, segments.length);
     for (let i = 0; i < nWorkers; i += 1) workers.push(worker());
 
     const results = await Promise.allSettled(workers);
@@ -278,7 +306,7 @@ export class Downloader {
         }
         if (res.status !== 206) {
           try { await res.body?.cancel(); } catch { /* 忽略 */ }
-          throw new DownloadError('Range 请求失败: HTTP ' + res.status, 'HTTP');
+          throw new DownloadError('Range 请求失败: HTTP ' + res.status, 'HTTP', res.status);
         }
         const reader = res.body.getReader();
         for (;;) {
@@ -319,7 +347,7 @@ export class Downloader {
     const res = await fetch(this.url, { headers, redirect: 'follow', signal: this.signal });
     if (!res.ok && res.status !== 206) {
       try { await res.body?.cancel(); } catch { /* 忽略 */ }
-      throw new DownloadError('下载失败: HTTP ' + res.status, 'HTTP');
+      throw new DownloadError('下载失败: HTTP ' + res.status, 'HTTP', res.status);
     }
     const resuming = res.status === 206;
     const fh = await open(this.out, resuming ? 'a' : 'w');

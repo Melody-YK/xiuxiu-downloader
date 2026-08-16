@@ -56,6 +56,7 @@ details#settings-panel input { width: 90px; }
 .setting-hint { color: #57606a; margin: 6px 0; }
 .radio { display: block; padding: 3px 0; cursor: pointer; }
 .radio .desc { display: block; margin-left: 20px; color: #8b949e; font-size: 11px; }
+.form-hint { color: #8b949e; font-size: 11px; margin: 6px 0 0; }
 details#f-headers summary { cursor: pointer; color: #57606a; }
 .hdr-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .hdr-row label { width: 90px; color: #57606a; }

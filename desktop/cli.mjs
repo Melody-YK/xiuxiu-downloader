@@ -14,6 +14,7 @@ const { values, positionals } = parseArgs({
     referer: { type: 'string' },
     'user-agent': { type: 'string', short: 'u' },
     header: { type: 'string', multiple: true },
+    auto: { type: 'boolean' },
     fresh: { type: 'boolean' },
     help: { type: 'boolean', short: 'h' },
   },
@@ -29,6 +30,7 @@ function usage() {
   console.log('      --referer <str>     请求 Referer');
   console.log('  -u, --user-agent <str>  请求 User-Agent');
   console.log('      --header "N: V"     自定义请求头（可多次）');
+  console.log('      --auto              自动调节连接数（检测到服务器限速自动降级重试）');
   console.log('      --fresh             忽略已有进度，重新下载');
   console.log('  -h, --help              显示帮助');
   console.log('下载中断后，用相同命令重新运行即可续传（依赖 <out>.meta.json 进度文件）。');
@@ -92,6 +94,7 @@ const dl = new Downloader({
   headers,
   connections,
   limitBytesPerSec: limit,
+  adaptiveConnections: values.auto ?? false,
   fresh: values.fresh ?? false,
   signal: ac.signal,
   onProgress: (pr) => {

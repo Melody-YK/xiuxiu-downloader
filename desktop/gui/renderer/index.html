@@ -36,12 +36,14 @@
         <option value="file">直链</option>
         <option value="media">流媒体</option>
       </select>
-      <input id="f-threads" type="number" min="1" max="32" value="8" title="线程数">
-      <input id="f-limit" type="number" min="0" step="64" value="0" title="限速 KB/s（0 = 不限）">
+      <input id="f-threads" type="number" min="1" max="32" value="8" title="线程数：该任务用几个连接下载">
+      <label class="ck"><input type="checkbox" id="f-auto" checked> 自动调节</label>
+      <input id="f-limit" type="number" min="0" step="64" value="0" title="限速：限制该任务下载速度（KB/s），0 = 不限速">
       <input id="f-out" placeholder="保存路径（默认：下载文件夹）">
       <button type="button" id="f-browse" title="选择保存位置">选择…</button>
       <button type="submit" id="f-add">添加下载</button>
     </form>
+    <p class="form-hint">「线程数」= 该任务用几个连接下载；勾选「自动调节」后，检测到服务器按连接数限速（429/403/连接被掐）会自动降级重试。「限速」= 限制该任务速度（KB/s），0 为不限。</p>
     <details id="f-headers">
       <summary>请求头（防盗链/登录站点用，可从「扩展捕获」一键带入）</summary>
       <div class="hdr-row"><label>Cookie</label><input id="f-cookie" placeholder="可选"></div>

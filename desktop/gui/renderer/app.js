@@ -119,6 +119,7 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
     kind: document.getElementById('f-kind').value,
     out: document.getElementById('f-out').value.trim() || null,
     threads,
+    adaptiveConnections: document.getElementById('f-auto').checked,
     limitBytesPerSec: limitKB > 0 ? limitKB * 1024 : undefined,
     headers,
   });

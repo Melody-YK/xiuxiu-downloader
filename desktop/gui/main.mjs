@@ -232,6 +232,7 @@ ipcMain.handle('task:add', (_e, task) => {
     headers: task?.headers ?? {},
     kind: task?.kind ?? 'auto',
     threads: task?.threads ?? 8,
+    adaptiveConnections: task?.adaptiveConnections === true,
     limitBytesPerSec: task?.limitBytesPerSec ?? undefined,
     streamUrls: Array.isArray(task?.streamUrls) ? task.streamUrls : undefined,
   });

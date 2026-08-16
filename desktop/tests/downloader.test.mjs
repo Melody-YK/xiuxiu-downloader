@@ -66,6 +66,7 @@ function startServer(opts) {
     noRange = false,
     advertiseRangeButIgnore = false,
     dropAfter = 0, // 每个请求服务超过该字节数后断开连接（>0 生效）
+    maxRangeConcurrent = 0, // 超过该并发数时对 Range 请求返回 429（>0 生效）
   } = opts;
   let active = 0;
   let maxActive = 0;
@@ -121,6 +122,11 @@ function startServer(opts) {
     }
 
     const range = parseRange(req.headers.range, size);
+    if (maxRangeConcurrent > 0 && active > maxRangeConcurrent) {
+      res.writeHead(429, { 'Content-Length': '0' });
+      res.end();
+      return;
+    }
     if (range === null) {
       res.writeHead(200, { 'Content-Length': String(size), 'Accept-Ranges': 'bytes' });
       if (isHead) {
@@ -320,6 +326,22 @@ test('动态切分在途段：进度恰好等于总量（不重复计数）', as
   assert.ok(progress.every((p) => p.completed <= size), '任何时刻进度都不应超过总量（无重复计数）');
   const last = progress[progress.length - 1];
   assert.equal(last.completed, size, '完成时应上报精确最终进度，实际 ' + last.completed);
+  await srv.close();
+});
+
+test('自适应连接：服务器按连接数限速(429)自动降级成功，非自适应失败', async () => {
+  const size = 8 * 1024 * 1024;
+  const srv = await startServer({ size, maxRangeConcurrent: 2, delayPerChunkMs: 30 });
+  const out = join(TMP, 'adaptive.bin');
+  const r = await new Downloader({ url: srv.url, out, connections: 8, adaptiveConnections: true, fresh: true }).download();
+  assert.equal(r.bytes, size);
+  assert.equal(r.adaptiveDegraded, true, '8 连接被限速后应降级');
+  assert.equal(await sha256File(out), expectedHash(size));
+  const out2 = join(TMP, 'adaptive-no.bin');
+  await assert.rejects(
+    () => new Downloader({ url: srv.url, out: out2, connections: 8, adaptiveConnections: false, fresh: true }).download(),
+    /HTTP 429/,
+  );
   await srv.close();
 });
 
