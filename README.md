@@ -28,6 +28,15 @@ desktop/     桌面端（纯 Node 核心 + Electron GUI，零第三方运行时�
   gui/       Electron 界面
   cli.mjs / media-cli.mjs   命令行工具
 
+## 下载安装包
+
+不想装开发环境？直接到 [Releases](https://github.com/Melody-YK/xiuxiu-downloader/releases) 下载：
+
+- `xiuxiu-downloader-*-portable.exe` —— 桌面端单文件版（双击即用，需系统安装 ffmpeg）
+- `extension.zip` —— 解压后在浏览器「加载解压缩的扩展」中选择该目录
+
+每次打 tag（`v*`）时由 GitHub Actions 自动构建发布。
+
 ## 快速开始（Windows）
 
 前置要求：**Node.js ≥ 22**、**ffmpeg**（加入 PATH）、**Edge 或 Chrome**
@@ -113,4 +122,4 @@ cd desktop && npm run gui          # 开发模式启动 GUI（-- --smoke 为无�
 
 ## 许可证
 
-暂未选择许可证；欢迎提 Issue / PR 讨论。
+[MIT](LICENSE) © 2026 Melody-YK

@@ -1,0 +1,60 @@
+# 打 tag（v*）或手动触发：双端测试 → 打包 portable exe → 发布到 Releases
+name: build-release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 扩展：构建与测试
+        shell: pwsh
+        run: |
+          cd extension
+          npm install
+          npm run build
+          npm test
+
+      - name: 扩展：打包 zip（供手动加载）
+        shell: pwsh
+        run: tar -a -c -f extension.zip -C extension --exclude=node_modules .
+
+      - name: 桌面端：测试
+        shell: pwsh
+        run: |
+          cd desktop
+          npm install
+          npm test
+
+      - name: 桌面端：打包 portable exe
+        shell: pwsh
+        run: |
+          cd desktop
+          npx electron-builder --win portable
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiuxiu-build
+          path: |
+            desktop/dist/*-portable.exe
+            extension.zip
+
+      - name: 发布 Release（仅 tag 触发）
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/dist/*-portable.exe
+            extension.zip
+          generate_release_notes: true
