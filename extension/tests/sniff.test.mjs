@@ -138,6 +138,18 @@ test('extractMediaUrl：取 currentSrc/src/source 子元素，跳过 blob', () =
   assert.equal(extractMediaUrl({ src: 'data:video/mp4;base64,xxx' }), null);
 });
 
+test('applyCapture：dedupeKey 同页只留一条并保留最新 URL', () => {
+  const state = createEmptyState();
+  applyCapture(state, cap({ url: 'https://api.bilibili.com/x/player/wbi/playurl?sig=old', type: 'dash', dedupeKey: 'bili-playurl' }));
+  applyCapture(state, cap({ url: 'https://api.bilibili.com/x/player/wbi/playurl?sig=new', type: 'dash', dedupeKey: 'bili-playurl', headers: { cookie: 'c=1' } }));
+  assert.equal(state.entries.length, 1, '同 dedupeKey 应合并为一条');
+  assert.equal(state.entries[0]?.url, 'https://api.bilibili.com/x/player/wbi/playurl?sig=new', '应保留最新 URL');
+  assert.equal(state.entries[0]?.headers?.cookie, 'c=1');
+  // 不同 tab 互不影响
+  applyCapture(state, cap({ url: 'https://api.bilibili.com/x/player/wbi/playurl?sig=t2', type: 'dash', dedupeKey: 'bili-playurl', tabId: 2 }));
+  assert.equal(state.entries.length, 2);
+});
+
 test('applyCapture：列表条数上限', () => {
   const state = createEmptyState();
   for (let i = 0; i < MAX_ENTRIES + 5; i += 1) {

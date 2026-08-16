@@ -114,6 +114,7 @@ async function handleResponse(details) {
             type: isBiliPlayurl ? 'dash' : (cls.type ?? 'video'),
             ext: cls.ext,
             headers: reqHeaders,
+            dedupeKey: isBiliPlayurl ? 'bili-playurl' : undefined,
             size,
             pageUrl: page.url,
             pageTitle: page.title,
@@ -171,6 +172,7 @@ async function applyHookUrl(url, sender) {
             type: isBili ? 'dash' : (cls.type ?? 'video'),
             ext: cls.ext,
             headers,
+            dedupeKey: isBili ? 'bili-playurl' : undefined,
         });
         if (result.changed !== 'ignored')
             schedulePersist();

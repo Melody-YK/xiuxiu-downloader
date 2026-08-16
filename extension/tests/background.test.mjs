@@ -238,12 +238,21 @@ test('background：webRequest 兜底捕获 B站 wbi playurl 接口（带 Cookie�
       responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
     }),
   );
+  // 播放器随后又请求了一次（新签名）——应合并为同一条并保留最新地址
+  fireResponse(
+    mediaRes({
+      requestId: 'req-wbi2',
+      url: 'https://api.bilibili.com/x/player/wbi/playurl?bvid=BV1x&cid=1&fnval=16&fourk=1',
+      responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+    }),
+  );
   await sleep(600);
   const stored = storageData[STORAGE_KEY];
-  const found = (stored?.entries ?? []).find((x) => x.url.includes('wbi'));
-  assert.ok(found, 'wbi playurl 接口应入库');
-  assert.equal(found.type, 'dash');
-  assert.equal(found.headers?.cookie, 'SESSDATA=y');
+  const found = (stored?.entries ?? []).filter((x) => x.url.includes('wbi'));
+  assert.equal(found.length, 1, '多次 playurl 请求应合并为一条');
+  assert.ok(found[0].url.includes('fnval=16'), '应保留最新请求的地址');
+  assert.equal(found[0].type, 'dash');
+  assert.equal(found[0].headers?.cookie, 'SESSDATA=y');
 });
 
 test('background：popup 清空消息清空状态与存储', async () => {

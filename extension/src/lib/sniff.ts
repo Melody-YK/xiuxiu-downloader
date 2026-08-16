@@ -30,6 +30,8 @@ export interface Entry {
   ext: string | null;
   /** 请求头透传信息；未捕获为 null */
   headers?: RequestHeaders | null;
+  /** 逻辑去重键（如 B站 playurl：同页面只保留一条，始终保留最新地址） */
+  dedupeKey?: string | null;
   /** 响应 Content-Length；未知为 null */
   size: number | null;
   /** 已观察到的分片请求数（仅 hls/dash/ts 条目有意义） */
@@ -51,6 +53,7 @@ export interface Capture {
   contentType: string;
   type: MediaType;
   headers?: RequestHeaders;
+  dedupeKey?: string;
   ext?: string | null;
   size?: number | null;
   pageUrl?: string;
@@ -184,11 +187,19 @@ export function applyCapture(state: CaptureState, cap: Capture): CaptureResult {
   const at = cap.at ?? Date.now();
   const key = cap.tabId + '|' + cap.url;
 
-  const existing = state.entries.find((e) => e.tabId === cap.tabId && e.url === cap.url);
+  const existing = state.entries.find(
+    (e) => e.tabId === cap.tabId && (e.url === cap.url || (cap.dedupeKey !== undefined && e.dedupeKey === cap.dedupeKey)),
+  );
   if (existing !== undefined) {
     existing.lastSeenAt = at;
     if (cap.size != null && existing.size == null) existing.size = cap.size;
     if (cap.headers !== undefined) existing.headers = { ...existing.headers, ...cap.headers };
+    if (cap.dedupeKey !== undefined && existing.url !== cap.url) {
+      // 同 dedupeKey 的旧条目换成最新 URL（B站 playurl 签名会过期，保留最新请求）
+      existing.url = cap.url;
+      existing.ext = cap.ext ?? existing.ext;
+      if (cap.contentType !== '') existing.contentType = cap.contentType;
+    }
     moveToFront(state, existing);
     return { changed: 'updated', entry: existing };
   }
@@ -226,6 +237,7 @@ export function applyCapture(state: CaptureState, cap: Capture): CaptureResult {
     contentType: cap.contentType,
     ext: cap.ext ?? null,
     headers: cap.headers ?? null,
+    dedupeKey: cap.dedupeKey ?? null,
     size: cap.size ?? null,
     segmentCount: cap.type === 'ts' ? 1 : 0,
     createdAt: at,

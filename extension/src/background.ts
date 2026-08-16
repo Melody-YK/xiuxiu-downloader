@@ -132,6 +132,7 @@ async function handleResponse(details: chrome.webRequest.OnResponseStartedDetail
       type: isBiliPlayurl ? 'dash' : (cls.type ?? 'video'),
       ext: cls.ext,
       headers: reqHeaders,
+      dedupeKey: isBiliPlayurl ? 'bili-playurl' : undefined,
       size,
       pageUrl: page.url,
       pageTitle: page.title,
@@ -184,6 +185,7 @@ async function applyHookUrl(url: string, sender: chrome.runtime.MessageSender): 
       type: isBili ? 'dash' : (cls.type ?? 'video'),
       ext: cls.ext,
       headers,
+      dedupeKey: isBili ? 'bili-playurl' : undefined,
     });
     if (result.changed !== 'ignored') schedulePersist();
     if (result.changed === 'added') {

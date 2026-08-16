@@ -103,13 +103,20 @@ export function createEmptyState() {
 export function applyCapture(state, cap) {
     const at = cap.at ?? Date.now();
     const key = cap.tabId + '|' + cap.url;
-    const existing = state.entries.find((e) => e.tabId === cap.tabId && e.url === cap.url);
+    const existing = state.entries.find((e) => e.tabId === cap.tabId && (e.url === cap.url || (cap.dedupeKey !== undefined && e.dedupeKey === cap.dedupeKey)));
     if (existing !== undefined) {
         existing.lastSeenAt = at;
         if (cap.size != null && existing.size == null)
             existing.size = cap.size;
         if (cap.headers !== undefined)
             existing.headers = { ...existing.headers, ...cap.headers };
+        if (cap.dedupeKey !== undefined && existing.url !== cap.url) {
+            // 同 dedupeKey 的旧条目换成最新 URL（B站 playurl 签名会过期，保留最新请求）
+            existing.url = cap.url;
+            existing.ext = cap.ext ?? existing.ext;
+            if (cap.contentType !== '')
+                existing.contentType = cap.contentType;
+        }
         moveToFront(state, existing);
         return { changed: 'updated', entry: existing };
     }
@@ -145,6 +152,7 @@ export function applyCapture(state, cap) {
         contentType: cap.contentType,
         ext: cap.ext ?? null,
         headers: cap.headers ?? null,
+        dedupeKey: cap.dedupeKey ?? null,
         size: cap.size ?? null,
         segmentCount: cap.type === 'ts' ? 1 : 0,
         createdAt: at,
