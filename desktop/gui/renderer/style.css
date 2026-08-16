@@ -57,6 +57,23 @@ details#f-headers summary { cursor: pointer; color: #57606a; }
 .hdr-row input { flex: 1; }
 .hint { color: #57606a; }
 #empty { color: #8b949e; text-align: center; margin-top: 24px; }
+#task-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #e4e7eb;
+  border-radius: 8px;
+}
+#task-toolbar[hidden] { display: none; }
+.ck { display: inline-flex; align-items: center; gap: 4px; color: #57606a; }
+#sel-count { color: #57606a; font-size: 12px; }
+button.danger { color: #cf222e; border-color: #ff8182; }
+button.danger:hover { background: #ffebe9; }
+.t-ck { flex: none; }
 #err-banner {
   margin: 10px 14px 0;
   padding: 8px 12px;

@@ -36,12 +36,22 @@
       <div class="hdr-row"><label>Referer</label><input id="f-referer" placeholder="可选"></div>
       <div class="hdr-row"><label>User-Agent</label><input id="f-ua" placeholder="可选"></div>
     </details>
+    <div id="task-toolbar" hidden>
+      <label class="ck"><input type="checkbox" id="sel-all"> 全选</label>
+      <span id="sel-count"></span>
+      <button type="button" id="del-sel">删除选中记录</button>
+      <button type="button" id="del-sel-files">删除选中记录和文件</button>
+      <button type="button" id="del-all" class="danger">清空全部记录</button>
+      <button type="button" id="del-all-files" class="danger">清空全部记录和文件</button>
+    </div>
     <div id="tasks"></div>
     <p id="empty">暂无任务。粘贴链接开始下载，或切到「扩展捕获」一键下载嗅探到的资源。</p>
   </main>
 
   <main id="view-cap" hidden>
-    <p class="hint">在 Edge 扩展 popup 点「发送到桌面端」，捕获条目会实时出现在这里（本程序需保持运行）。点「下载」自动带上 Cookie/Referer/UA。</p>
+    <p class="hint">在 Edge 扩展 popup 点「发送到桌面端」，捕获条目会实时出现在这里（本程序需保持运行）。点「下载」自动带上 Cookie/Referer/UA。
+      <button type="button" id="cap-clear" class="danger">清空捕获</button>
+    </p>
     <div id="captures"></div>
   </main>
 

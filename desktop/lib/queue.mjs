@@ -1,5 +1,6 @@
 // 下载任务队列：并发限制 / 取消 / 进度事件（纯 Node，GUI 与测试共用）
 import { EventEmitter } from 'node:events';
+import { unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { Downloader } from './downloader.mjs';
 import { downloadMedia } from './pipeline.mjs';
@@ -32,6 +33,13 @@ export function defaultFileName(url) {
 
 export function ensureMp4Ext(name) {
   return /\.mp4$/i.test(name) ? name : name + '.mp4';
+}
+
+/** 删除任务产出的文件（主文件 + 可能的续传进度文件），不存在则忽略 */
+export async function deleteTaskFiles(out) {
+  if (typeof out !== 'string' || out === '') return;
+  await unlink(out).catch(() => {});
+  await unlink(out + '.meta.json').catch(() => {});
 }
 
 /** 文件名清洗：去掉 Windows 非法字符，限长，防空白 */

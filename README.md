@@ -7,7 +7,7 @@
 - 🕵️ **三层捕获**：DOM 扫描（视频旁「⬇ 下载」悬浮按钮）、webRequest 网络嗅探、fetch/XHR Hook（对付 MSE 动态站点）
 - 🚀 **多线程下载**：HTTP Range 分段 + IDM 式动态切分、断点续传、令牌桶限速、不支持 Range 自动降级单线程
 - 🎬 **流媒体**：HLS(m3u8)/DASH(mpd)/B站 playurl → 分片下载 → ffmpeg 合并 MP4；支持 AES-128 解密、fMP4、字节范围、无清单分片流
-- 🖥️ **Electron GUI**：任务队列、实时进度/速度、扩展捕获一键下载（自动携带 Cookie/Referer/UA）、下载历史持久化
+- 🖥️ **Electron GUI**：任务队列、实时进度/速度、扩展捕获一键下载（自动携带 Cookie/Referer/UA）、下载历史持久化、下载管理（单个/批量/全部删除，可选同时删除已下载文件）
 - 🔗 **扩展 ↔ 桌面端联动**：native messaging（Chrome 官方协议）+ 本地 HTTP 推送，点击网页按钮直达桌面端开始下载
 
 ## 架构

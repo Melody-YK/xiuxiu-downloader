@@ -5,7 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { JobManager, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
+import { JobManager, deleteTaskFiles, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const smoke = process.argv.includes('--smoke');
@@ -222,6 +222,29 @@ ipcMain.handle('task:add', (_e, task) => {
 });
 ipcMain.handle('task:cancel', (_e, id) => jobs.cancel(id));
 ipcMain.handle('task:remove', (_e, id) => jobs.remove(id));
+ipcMain.handle('task:removeMany', async (_e, opts) => {
+  const ids = Array.isArray(opts?.ids) ? opts.ids : [];
+  const withFiles = opts?.withFiles === true;
+  for (const id of ids) {
+    const t = jobs.getSnapshot().find((x) => x.id === id);
+    if (withFiles && t !== undefined && t.out !== null) await deleteTaskFiles(t.out);
+    jobs.remove(id);
+  }
+  return { ok: true };
+});
+ipcMain.handle('task:removeAll', async (_e, opts) => {
+  const withFiles = opts?.withFiles === true;
+  const ids = jobs.getSnapshot().map((t) => t.id);
+  for (const id of ids) {
+    const t = jobs.getSnapshot().find((x) => x.id === id);
+    if (withFiles && t !== undefined && t.out !== null) await deleteTaskFiles(t.out);
+    jobs.remove(id);
+  }
+  return { ok: true };
+});
+ipcMain.handle('capture:removeAll', () => {
+  captures.length = 0;
+});
 ipcMain.handle('util:openFolder', (_e, p) => {
   if (typeof p === 'string' && p !== '') shell.showItemInFolder(p);
 });

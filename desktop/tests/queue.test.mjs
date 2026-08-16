@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { JobManager, defaultFileName, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
+import { JobManager, defaultFileName, deleteTaskFiles, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
 import { sleep } from '../lib/downloader.mjs';
 
 const TMP = join(tmpdir(), 'queue-test-' + process.pid);
@@ -94,6 +94,16 @@ test('isMediaUrl：识别 m3u8/mpd', () => {
   assert.equal(isMediaUrl('https://a.com/x.m3u8?token=1'), true);
   assert.equal(isMediaUrl('https://a.com/x.mpd'), true);
   assert.equal(isMediaUrl('https://a.com/x.mp4'), false);
+});
+
+test('deleteTaskFiles：删除主文件与进度文件，不存在不报错', async () => {
+  const out = join(TMP, 'del.bin');
+  await writeFile(out, 'data');
+  await writeFile(out + '.meta.json', '{}');
+  await deleteTaskFiles(out);
+  assert.equal(await stat(out).then(() => true).catch(() => false), false);
+  assert.equal(await stat(out + '.meta.json').then(() => true).catch(() => false), false);
+  await deleteTaskFiles(join(TMP, 'not-exist.bin')); // 不存在也不应抛错
 });
 
 test('defaultFileName：playurl 地址用 bvid 兜底命名', () => {

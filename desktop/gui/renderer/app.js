@@ -42,6 +42,10 @@ const capCount = document.getElementById('cap-count');
 const tasksEl = document.getElementById('tasks');
 const emptyEl = document.getElementById('empty');
 const capturesEl = document.getElementById('captures');
+const toolbar = document.getElementById('task-toolbar');
+const selAllCk = document.getElementById('sel-all');
+const selCountEl = document.getElementById('sel-count');
+const sel = new Set();
 
 const STATUS_LABEL = { queued: '排队中', running: '下载中', done: '已完成', error: '失败', canceled: '已取消' };
 const TYPE_LABEL = { video: '视频', audio: '音频', hls: 'HLS', dash: 'DASH', ts: '分片', stream: '分片流' };
@@ -104,17 +108,73 @@ document.addEventListener('drop', (e) => {
 });
 
 // ---- 任务列表 ----
+function updateToolbar() {
+  toolbar.hidden = state.tasks.size === 0;
+  selCountEl.textContent = sel.size > 0 ? '已选 ' + sel.size + ' 项' : '';
+  selAllCk.checked = state.tasks.size > 0 && sel.size === state.tasks.size;
+}
+
+selAllCk.addEventListener('change', () => {
+  const checked = selAllCk.checked;
+  for (const [id, entry] of state.tasks) {
+    if (checked) sel.add(id);
+    else sel.delete(id);
+    entry.ck.checked = checked;
+  }
+  updateToolbar();
+});
+
+async function deleteSelected(withFiles) {
+  if (sel.size === 0) {
+    showError('请先勾选要删除的任务');
+    return;
+  }
+  const n = sel.size;
+  if (withFiles && !window.confirm('将同时删除选中的 ' + n + ' 个任务的已下载文件，确定？')) return;
+  await bridge.removeTasks([...sel], withFiles);
+  sel.clear();
+  updateToolbar();
+}
+
+async function deleteAllTasks(withFiles) {
+  if (state.tasks.size === 0) return;
+  const msg = withFiles ? '将清空全部下载记录并删除所有已下载文件，确定？' : '将清空全部下载记录（文件保留），确定？';
+  if (!window.confirm(msg)) return;
+  await bridge.removeAllTasks(withFiles);
+  sel.clear();
+  updateToolbar();
+}
+
+document.getElementById('del-sel').addEventListener('click', () => void deleteSelected(false));
+document.getElementById('del-sel-files').addEventListener('click', () => void deleteSelected(true));
+document.getElementById('del-all').addEventListener('click', () => void deleteAllTasks(false));
+document.getElementById('del-all-files').addEventListener('click', () => void deleteAllTasks(true));
+
+document.getElementById('cap-clear').addEventListener('click', () => {
+  if (state.captures.length === 0) return;
+  if (!window.confirm('清空全部捕获记录？')) return;
+  void bridge.removeAllCaptures().then(() => {
+    state.captures = [];
+    capCount.textContent = '0';
+    renderCaptures();
+  });
+});
+
 function buildTaskRow() {
   const row = document.createElement('div');
   row.className = 'task';
 
   const head = document.createElement('div');
   head.className = 't-head';
+  const ck = document.createElement('input');
+  ck.type = 'checkbox';
+  ck.className = 't-ck';
+  ck.title = '勾选以批量操作';
   const name = document.createElement('span');
   name.className = 't-name';
   const status = document.createElement('span');
   status.className = 't-status';
-  head.append(name, status);
+  head.append(ck, name, status);
 
   const meta = document.createElement('div');
   meta.className = 't-meta';
@@ -132,19 +192,32 @@ function buildTaskRow() {
   const openBtn = document.createElement('button');
   openBtn.textContent = '打开位置';
   const delBtn = document.createElement('button');
-  delBtn.textContent = '删除';
-  ops.append(cancelBtn, openBtn, delBtn);
+  delBtn.textContent = '删除记录';
+  const delFileBtn = document.createElement('button');
+  delFileBtn.textContent = '删除记录和文件';
+  delFileBtn.className = 'danger';
+  ops.append(cancelBtn, openBtn, delBtn, delFileBtn);
 
   row.append(head, meta, barWrap, ops);
 
   return {
     row,
+    ck,
     bind: (t) => {
       name.textContent = fileNameOf(t.url);
       name.title = t.url;
       cancelBtn.onclick = () => void bridge.cancelTask(t.id);
       openBtn.onclick = () => void bridge.openFolder(t.out);
       delBtn.onclick = () => void bridge.removeTask(t.id);
+      delFileBtn.onclick = () => {
+        if (!window.confirm('删除该记录并删除已下载文件？')) return;
+        void bridge.removeTasks([t.id], true);
+      };
+      ck.onchange = () => {
+        if (ck.checked) sel.add(t.id);
+        else sel.delete(t.id);
+        updateToolbar();
+      };
     },
     update: (t) => {
       status.textContent = STATUS_LABEL[t.status] ?? t.status;
@@ -175,6 +248,7 @@ function buildTaskRow() {
       cancelBtn.hidden = !(t.status === 'queued' || t.status === 'running');
       openBtn.hidden = t.status !== 'done';
       delBtn.hidden = t.status === 'running';
+      delFileBtn.hidden = t.status === 'running';
     },
   };
 }
@@ -189,6 +263,7 @@ function upsertTask(t) {
   }
   entry.update(t);
   emptyEl.hidden = state.tasks.size > 0;
+  updateToolbar();
 }
 
 // ---- 扩展捕获列表 ----
@@ -298,7 +373,9 @@ void (async () => {
       if (row !== undefined) {
         row.row.remove();
         state.tasks.delete(ev.data.id);
+        sel.delete(ev.data.id);
         emptyEl.hidden = state.tasks.size > 0;
+        updateToolbar();
       }
       return;
     }
