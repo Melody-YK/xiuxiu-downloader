@@ -144,6 +144,8 @@ function startIngestServer() {
           cookie: e.cookie ?? '',
           referer: e.referer ?? '',
           userAgent: e.userAgent ?? '',
+          segmentUrls: Array.isArray(e.segmentUrls) ? e.segmentUrls : [],
+          truncated: e.truncated === true,
           at: Date.now(),
         });
         // 网页下载按钮（autoDownload）直达：自动建立下载任务并带上请求头
@@ -152,13 +154,14 @@ function startIngestServer() {
           if (e.cookie) headers.Cookie = e.cookie;
           if (e.referer) headers.Referer = e.referer;
           if (e.userAgent) headers['User-Agent'] = e.userAgent;
-          const kind = e.mediaType === 'hls' || e.mediaType === 'dash' ? 'media' : 'auto';
+          const kind = e.mediaType === 'hls' || e.mediaType === 'dash' || e.mediaType === 'stream' ? 'media' : 'auto';
           jobs.add({
             url: e.url,
             out: outForTask({ kind, out: null }, e.url),
             outDir: app.getPath('downloads'),
             kind,
             headers,
+            streamUrls: Array.isArray(e.segmentUrls) ? e.segmentUrls : undefined,
           });
         }
       }
@@ -213,6 +216,7 @@ ipcMain.handle('task:add', (_e, task) => {
     kind: task?.kind ?? 'auto',
     threads: task?.threads ?? 8,
     limitBytesPerSec: task?.limitBytesPerSec ?? undefined,
+    streamUrls: Array.isArray(task?.streamUrls) ? task.streamUrls : undefined,
   });
   return { ok: true, id };
 });

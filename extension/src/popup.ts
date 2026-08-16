@@ -6,6 +6,7 @@ const TYPE_LABEL: Record<MediaType, string> = {
   hls: 'HLS',
   dash: 'DASH',
   ts: '分片',
+  stream: '分片流',
 };
 
 const debugEl = document.getElementById('debug') as HTMLDivElement;
@@ -324,6 +325,8 @@ async function sendToDesktop(): Promise<void> {
       cookie: e.headers?.cookie ?? '',
       referer: e.headers?.referer ?? '',
       userAgent: e.headers?.userAgent ?? '',
+      segmentUrls: e.segmentUrls ?? [],
+      truncated: e.truncated === true,
     })),
   });
   setTimeout(() => finish('宿主无响应'), 3000);

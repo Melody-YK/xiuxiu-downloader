@@ -61,6 +61,26 @@ export function getHeader(headers, name) {
     return null;
 }
 /** 从 B站 playurl 地址提取视频标识（bvid/ep_id/aid） */
+/** 分片流分组键：去掉查询参数与文件名尾部数字（seg_00001.mp4 → seg_.mp4）。
+ *  无法安全分组（纯数字文件名等）返回 null。 */
+export function segmentGroupKey(url) {
+    try {
+        const u = new URL(url);
+        const base = u.pathname.split('/').filter(Boolean).pop() ?? '';
+        const m = /^(.*?)(\d+)(\.[A-Za-z0-9]{2,5})$/.exec(base);
+        if (m === null)
+            return null;
+        const stem = m[1] ?? '';
+        if (stem === '' || /^[_.-]+$/.test(stem))
+            return null;
+        return (u.host + u.pathname.replace(/[^/]*$/, '') + stem + (m[3] ?? '')).toLowerCase();
+    }
+    catch {
+        return null;
+    }
+}
+/** 单个分片流条目允许保存的分片地址上限 */
+export const MAX_SEGMENT_URLS = 5000;
 export function bvidFromPlayurl(url) {
     const m = /[?&]bvid=([A-Za-z0-9]+)/.exec(url);
     if (m !== null)
@@ -156,6 +176,33 @@ export function applyCapture(state, cap) {
         moveToFront(state, existing);
         return { changed: 'updated', entry: existing };
     }
+    // 无清单站点的连续 mp4 分片：第二片出现时把首片条目标记为「分片流」
+    if (cap.groupKey !== undefined && cap.groupKey !== null && (cap.type === 'video' || cap.type === 'audio')) {
+        const grouped = state.entries.find((e) => e.tabId === cap.tabId &&
+            e.groupKey === cap.groupKey &&
+            (e.type === 'video' || e.type === 'audio' || e.type === 'stream'));
+        if (grouped !== undefined) {
+            if (grouped.type === 'stream') {
+                if (grouped.segmentUrls !== undefined && !grouped.segmentUrls.includes(cap.url)) {
+                    if (grouped.segmentUrls.length >= MAX_SEGMENT_URLS)
+                        grouped.truncated = true;
+                    else
+                        grouped.segmentUrls.push(cap.url);
+                    grouped.segmentCount = grouped.segmentUrls.length;
+                }
+                grouped.lastSeenAt = at;
+                moveToFront(state, grouped);
+                return { changed: 'segmented', entry: grouped };
+            }
+            // 首片仍是普通条目：原地转换为分片流
+            grouped.type = 'stream';
+            grouped.segmentUrls = [grouped.url, cap.url];
+            grouped.segmentCount = 2;
+            grouped.lastSeenAt = at;
+            moveToFront(state, grouped);
+            return { changed: 'segmented', entry: grouped };
+        }
+    }
     if (cap.type === 'ts') {
         if (state.segmentKeys.includes(key)) {
             return { changed: 'ignored' };
@@ -189,6 +236,7 @@ export function applyCapture(state, cap) {
         ext: cap.ext ?? null,
         headers: cap.headers ?? null,
         dedupeKey: cap.dedupeKey ?? null,
+        groupKey: cap.groupKey ?? null,
         size: cap.size ?? null,
         segmentCount: cap.type === 'ts' ? 1 : 0,
         createdAt: at,

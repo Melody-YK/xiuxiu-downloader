@@ -70,6 +70,7 @@ export class JobManager extends EventEmitter {
       headers: task.headers ?? {},
       kind: task.kind ?? 'auto',
       isMedia,
+      streamUrls: Array.isArray(task.streamUrls) ? task.streamUrls : undefined,
       threads: task.threads ?? 8,
       limitBytesPerSec: task.limitBytesPerSec ?? undefined,
       status: 'queued',
@@ -184,6 +185,7 @@ export class JobManager extends EventEmitter {
           connections: t.threads,
           keep: false,
           signal: abort.signal,
+          streamUrls: t.streamUrls,
           onPhase: (s) => {
             t.phase = s;
             this.emit('event', { id: t.id, type: 'status', data: this.snapshotOf(t) });

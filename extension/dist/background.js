@@ -1,4 +1,4 @@
-import { applyCapture, bvidFromPageUrl, bvidFromPlayurl, classify, cleanBiliTitle, createEmptyState, extOf, extractRequestHeaders, getHeader, NATIVE_HOST_NAME, STORAGE_KEY, } from './lib/sniff.js';
+import { applyCapture, bvidFromPageUrl, bvidFromPlayurl, classify, cleanBiliTitle, createEmptyState, extOf, extractRequestHeaders, getHeader, NATIVE_HOST_NAME, segmentGroupKey, STORAGE_KEY, } from './lib/sniff.js';
 // ---- 状态管理：内存为唯一事实源，chrome.storage 为持久化镜像 ----
 let state = createEmptyState();
 /** SW 生命周期内的快速去重（持久化去重依赖 state.entries / segmentKeys） */
@@ -130,6 +130,7 @@ async function handleResponse(details) {
             ext: cls.ext,
             headers: reqHeaders,
             dedupeKey: isBiliPlayurl ? 'bili:' + (bvid !== '' ? bvid : 'playurl') : undefined,
+            groupKey: !isBiliPlayurl ? segmentGroupKey(url) : null,
             size,
             pageUrl: page.url,
             pageTitle,
@@ -189,6 +190,7 @@ async function applyHookUrl(url, sender, bvid, title) {
             ext: cls.ext,
             headers,
             dedupeKey: isBili ? 'bili:' + bid : undefined,
+            groupKey: !isBili ? segmentGroupKey(url) : null,
             pageTitle: isBili ? (title ?? '') : undefined,
         });
         if (result.changed !== 'ignored')

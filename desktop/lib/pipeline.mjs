@@ -14,6 +14,32 @@ const BILI_DEFAULT_HEADERS = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
 };
 
+// 无清单站点的 mp4 分片流：按序号排序 → 并发下载 → 拼接 → ffmpeg 转封装
+function segIndexOf(u) {
+  try {
+    const m = /(\d+)(\.[A-Za-z0-9]{2,5})$/.exec(new URL(u).pathname);
+    return m !== null ? Number(m[1]) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function downloadStream(opts) {
+  const { out, headers = {}, connections = 8, keep = false, signal, onProgress = () => {}, onPhase = () => {} } = opts;
+  const urls = [...opts.streamUrls].sort((a, b) => segIndexOf(a) - segIndexOf(b));
+  onPhase('分片流: ' + urls.length + ' 个分片' + (opts.truncated === true ? '（已截断，仅前段）' : ''));
+  const workDir = join(dirname(out), basename(out) + '.parts');
+  await rm(workDir, { recursive: true, force: true });
+  const tasks = urls.map((u) => ({ url: u, byterange: null, key: null, map: null }));
+  const files = await downloadSegments(tasks, { headers, connections, workDir, signal, onProgress });
+  onPhase('合并分片');
+  const merged = await concatFiles(files, join(workDir, 'merged.mp4'));
+  onPhase('ffmpeg 转封装');
+  await ffmpegRemux(merged, out);
+  if (!keep) await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  return { out, kind: 'stream', segments: urls.length, label: '分片流' };
+}
+
 async function downloadBili(opts) {
   const { url, out, headers = {}, connections = 8, keep = false, signal, onProgress = () => {}, onPhase = () => {} } = opts;
   const h = { ...BILI_DEFAULT_HEADERS, ...headers };
@@ -78,6 +104,7 @@ export async function downloadMedia(opts) {
     onPhase = () => {},
   } = opts;
 
+  if (Array.isArray(opts.streamUrls) && opts.streamUrls.length > 0) return downloadStream(opts);
   if (isBiliPlayurlUrl(url)) return downloadBili(opts);
 
   onPhase('请求清单');

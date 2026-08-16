@@ -44,7 +44,7 @@ const emptyEl = document.getElementById('empty');
 const capturesEl = document.getElementById('captures');
 
 const STATUS_LABEL = { queued: '排队中', running: '下载中', done: '已完成', error: '失败', canceled: '已取消' };
-const TYPE_LABEL = { video: '视频', audio: '音频', hls: 'HLS', dash: 'DASH', ts: '分片' };
+const TYPE_LABEL = { video: '视频', audio: '音频', hls: 'HLS', dash: 'DASH', ts: '分片', stream: '分片流' };
 
 function switchTab(which) {
   const dl = which === 'dl';
@@ -241,8 +241,9 @@ function renderCaptures() {
       if (c.userAgent) headers['User-Agent'] = c.userAgent;
       void safeAddTask({
         url: c.url,
-        kind: c.mediaType === 'hls' || c.mediaType === 'dash' ? 'media' : 'auto',
+        kind: c.mediaType === 'hls' || c.mediaType === 'dash' || c.mediaType === 'stream' ? 'media' : 'auto',
         headers,
+        streamUrls: c.segmentUrls ?? [],
       }).then((ok) => {
         if (ok) switchTab('dl');
       });

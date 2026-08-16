@@ -12,6 +12,7 @@ import {
   extractRequestHeaders,
   getHeader,
   MAX_ENTRIES,
+  segmentGroupKey,
 } from '../dist/lib/sniff.js';
 
 function cap(over = {}) {
@@ -178,6 +179,40 @@ test('bvid 提取：playurl 查询参数与页面路径', () => {
   assert.equal(bvidFromPageUrl('https://www.bilibili.com/video/BV1Mybk65EBt/?spm=1'), 'BV1Mybk65EBt');
   assert.equal(bvidFromPageUrl('https://www.bilibili.com/bangumi/play/ep12345'), 'ep12345');
   assert.equal(bvidFromPageUrl('https://www.bilibili.com/'), '');
+});
+
+test('segmentGroupKey：连续编号分片归一化分组', () => {
+  assert.equal(segmentGroupKey('https://cdn.x.com/v/123/seg_00001.mp4?token=a'), 'cdn.x.com/v/123/seg_.mp4');
+  assert.equal(segmentGroupKey('https://cdn.x.com/v/123/seg_00002.mp4?token=b'), 'cdn.x.com/v/123/seg_.mp4');
+  assert.equal(segmentGroupKey('https://cdn.x.com/file-1.mp4'), 'cdn.x.com/file-.mp4');
+  assert.equal(segmentGroupKey('https://cdn.x.com/123.mp4'), null, '纯数字文件名不分组');
+  assert.equal(segmentGroupKey('https://cdn.x.com/bunny.mp4'), null, '无编号不分组');
+  assert.equal(segmentGroupKey('not a url'), null);
+});
+
+test('applyCapture：连续 mp4 分片聚合为分片流（stream）', () => {
+  const state = createEmptyState();
+  const g = (i) => ({
+    url: 'https://cdn.x.com/seg_' + String(i).padStart(5, '0') + '.mp4',
+    tabId: 1,
+    contentType: 'video/mp4',
+    type: 'video',
+    groupKey: 'cdn.x.com/seg_.mp4',
+  });
+  assert.equal(applyCapture(state, g(1)).changed, 'added');
+  assert.equal(state.entries.length, 1);
+  assert.equal(state.entries[0]?.type, 'video', '首片仍是普通视频条目');
+  const r2 = applyCapture(state, g(2));
+  assert.equal(r2.changed, 'segmented');
+  assert.equal(state.entries.length, 1, '不新增条目');
+  assert.equal(state.entries[0]?.type, 'stream', '第二片出现时转为分片流');
+  assert.deepEqual(state.entries[0]?.segmentUrls, [g(1).url, g(2).url]);
+  applyCapture(state, g(3));
+  assert.equal(state.entries[0]?.segmentCount, 3);
+  // 不同分组互不影响
+  applyCapture(state, { ...g(1), url: 'https://cdn.x.com/other_1.mp4', groupKey: 'cdn.x.com/other_.mp4' });
+  assert.equal(state.entries.length, 2);
+  assert.equal(state.entries[0]?.type, 'video');
 });
 
 test('applyCapture：列表条数上限', () => {

@@ -9,6 +9,7 @@ import {
   extractRequestHeaders,
   getHeader,
   NATIVE_HOST_NAME,
+  segmentGroupKey,
   STORAGE_KEY,
   type Capture,
   type CaptureState,
@@ -152,6 +153,7 @@ async function handleResponse(details: chrome.webRequest.OnResponseStartedDetail
       ext: cls.ext,
       headers: reqHeaders,
       dedupeKey: isBiliPlayurl ? 'bili:' + (bvid !== '' ? bvid : 'playurl') : undefined,
+      groupKey: !isBiliPlayurl ? segmentGroupKey(url) : null,
       size,
       pageUrl: page.url,
       pageTitle,
@@ -211,6 +213,7 @@ async function applyHookUrl(
       ext: cls.ext,
       headers,
       dedupeKey: isBili ? 'bili:' + bid : undefined,
+      groupKey: !isBili ? segmentGroupKey(url) : null,
       pageTitle: isBili ? (title ?? '') : undefined,
     });
     if (result.changed !== 'ignored') schedulePersist();
