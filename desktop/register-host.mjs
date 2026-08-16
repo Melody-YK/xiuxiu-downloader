@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,9 +35,11 @@ const manifest = {
   allowed_origins: ['chrome-extension://*/'],
 };
 
-if (!existsSync(launcher)) {
-  writeFileSync(launcher, '@echo off\r\nnode \"%~dp0host.mjs\" %*\r\n', 'utf8');
-  console.log('已生成启动器: ' + launcher);
+// 启动器使用 node.exe 绝对路径：浏览器启动宿主进程时继承的 PATH 可能不含 node，绝对路径一劳永逸
+const launcherContent = '@echo off\r\n\"' + process.execPath + '\" \"%~dp0host.mjs\" %*\r\n';
+if (!existsSync(launcher) || readFileSync(launcher, 'utf8').trim() !== launcherContent.trim()) {
+  writeFileSync(launcher, launcherContent, 'utf8');
+  console.log('已更新启动器: ' + launcher);
 }
 
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');

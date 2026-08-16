@@ -4,6 +4,36 @@
 const bridge = window.api;
 const state = { tasks: new Map(), captures: [] };
 
+// ---- 全局错误可见化（任何脚本错误都显示出来，而不是静默失败） ----
+const errBanner = document.getElementById('err-banner');
+function showError(msg) {
+  errBanner.textContent = '⚠ ' + msg;
+  errBanner.hidden = false;
+  clearTimeout(showError.timer);
+  showError.timer = setTimeout(() => {
+    errBanner.hidden = true;
+  }, 8000);
+}
+window.addEventListener('error', (e) => showError('页面脚本错误: ' + (e.message ?? '未知')));
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason;
+  showError('操作失败: ' + (reason?.message ?? String(reason)));
+});
+
+async function safeAddTask(task) {
+  try {
+    const r = await bridge.addTask(task);
+    if (r !== null && typeof r === 'object' && r.error) {
+      showError(r.error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    showError('添加任务失败: ' + (err?.message ?? String(err)));
+    return false;
+  }
+}
+
 const tabDlBtn = document.getElementById('tab-dl');
 const tabCapBtn = document.getElementById('tab-cap');
 const viewDl = document.getElementById('view-dl');
@@ -27,11 +57,11 @@ tabDlBtn.addEventListener('click', () => switchTab('dl'));
 tabCapBtn.addEventListener('click', () => switchTab('cap'));
 
 // ---- 添加任务 ----
-document.getElementById('add-form').addEventListener('submit', (e) => {
+document.getElementById('add-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const url = document.getElementById('f-url').value.trim();
   if (!/^https?:\/\//i.test(url)) {
-    window.alert('请输入 http(s) 链接');
+    showError('请输入 http(s) 链接');
     return;
   }
   const headers = {};
@@ -43,7 +73,7 @@ document.getElementById('add-form').addEventListener('submit', (e) => {
   if (ua !== '') headers['User-Agent'] = ua;
   const threads = Math.max(1, Math.min(32, Number(document.getElementById('f-threads').value) || 8));
   const limitKB = Math.max(0, Number(document.getElementById('f-limit').value) || 0);
-  void bridge.addTask({
+  const ok = await safeAddTask({
     url,
     kind: document.getElementById('f-kind').value,
     out: document.getElementById('f-out').value.trim() || null,
@@ -51,8 +81,17 @@ document.getElementById('add-form').addEventListener('submit', (e) => {
     limitBytesPerSec: limitKB > 0 ? limitKB * 1024 : undefined,
     headers,
   });
-  document.getElementById('f-url').value = '';
-  document.getElementById('f-out').value = '';
+  if (ok) {
+    document.getElementById('f-url').value = '';
+    document.getElementById('f-out').value = '';
+  }
+});
+
+// 保存位置选择器
+document.getElementById('f-browse').addEventListener('click', async () => {
+  const url = document.getElementById('f-url').value.trim();
+  const p = await bridge.chooseSavePath({ defaultName: fileNameOf(url) });
+  if (p) document.getElementById('f-out').value = p;
 });
 
 // ---- 拖拽 URL ----
@@ -170,12 +209,13 @@ function renderCaptures() {
       if (c.cookie) headers.Cookie = c.cookie;
       if (c.referer) headers.Referer = c.referer;
       if (c.userAgent) headers['User-Agent'] = c.userAgent;
-      void bridge.addTask({
+      void safeAddTask({
         url: c.url,
         kind: c.mediaType === 'hls' || c.mediaType === 'dash' ? 'media' : 'auto',
         headers,
+      }).then((ok) => {
+        if (ok) switchTab('dl');
       });
-      switchTab('dl');
     });
     row.append(badge, name, meta, dl);
     capturesEl.append(row);

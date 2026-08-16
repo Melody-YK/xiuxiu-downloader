@@ -1,2 +1,2 @@
 @echo off
-node "%~dp0host.mjs" %*
+"D:\Apps\DevTools\java\Node.js\node.exe" "%~dp0host.mjs" %*

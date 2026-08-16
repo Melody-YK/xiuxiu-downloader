@@ -57,6 +57,15 @@ details#f-headers summary { cursor: pointer; color: #57606a; }
 .hdr-row input { flex: 1; }
 .hint { color: #57606a; }
 #empty { color: #8b949e; text-align: center; margin-top: 24px; }
+#err-banner {
+  margin: 10px 14px 0;
+  padding: 8px 12px;
+  background: #ffebe9;
+  border: 1px solid #ff818266;
+  border-radius: 8px;
+  color: #cf222e;
+  font-size: 12px;
+}
 
 .task {
   background: #fff;

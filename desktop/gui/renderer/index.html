@@ -15,6 +15,7 @@
     </nav>
   </header>
 
+  <div id="err-banner" hidden></div>
   <main id="view-dl">
     <form id="add-form">
       <input id="f-url" class="grow" placeholder="粘贴 http(s) 链接（直链 / m3u8 / mpd），也可直接拖入" required>
@@ -25,6 +26,8 @@
       </select>
       <input id="f-threads" type="number" min="1" max="32" value="8" title="线程数">
       <input id="f-limit" type="number" min="0" step="64" value="0" title="限速 KB/s（0 = 不限）">
+      <input id="f-out" placeholder="保存路径（默认：下载文件夹）">
+      <button type="button" id="f-browse" title="选择保存位置">选择…</button>
       <button type="submit" id="f-add">添加下载</button>
     </form>
     <details id="f-headers">

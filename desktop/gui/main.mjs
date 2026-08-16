@@ -1,5 +1,5 @@
 // Electron 主进程：窗口 + IPC + 扩展捕获接收（host.mjs 通过 http://127.0.0.1:17321/ingest 推送）
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { createServer, request } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { JobManager } from '../lib/queue.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const INGEST_PORT = 17321;
 const smoke = process.argv.includes('--smoke');
+const INGEST_PORT = smoke ? 17322 : 17321; // 冒烟自检用独立端口，避免与正在运行的真实 GUI 冲突
 if (smoke) {
   // 冒烟模式使用独立 userData：不与真实实例抢单实例锁，也不污染下载历史
   app.setPath('userData', join(tmpdir(), 'dl-gui-smoke'));
@@ -174,8 +174,10 @@ function startIngestServer() {
 }
 
 ipcMain.handle('task:add', (_e, task) => {
+  const url = String(task?.url ?? '').trim();
+  if (!/^https?:\/\//i.test(url)) return { ok: false, error: '链接无效（需要 http(s) 开头）' };
   const id = jobs.add({
-    url: String(task?.url ?? ''),
+    url,
     out: task?.out ?? null,
     outDir: app.getPath('downloads'),
     headers: task?.headers ?? {},
@@ -183,11 +185,20 @@ ipcMain.handle('task:add', (_e, task) => {
     threads: task?.threads ?? 8,
     limitBytesPerSec: task?.limitBytesPerSec ?? undefined,
   });
-  return id;
+  return { ok: true, id };
 });
 ipcMain.handle('task:cancel', (_e, id) => jobs.cancel(id));
 ipcMain.handle('util:openFolder', (_e, p) => {
   if (typeof p === 'string' && p !== '') shell.showItemInFolder(p);
+});
+ipcMain.handle('util:chooseSavePath', async (_e, opts) => {
+  const def = typeof opts?.defaultName === 'string' && opts.defaultName !== '' ? opts.defaultName : 'download';
+  const r = await dialog.showSaveDialog(win, {
+    title: '选择保存位置',
+    defaultPath: join(app.getPath('downloads'), def),
+    properties: ['createDirectory', 'showOverwriteConfirmation'],
+  });
+  return r.canceled ? null : r.filePath;
 });
 ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot(), captures }));
 
