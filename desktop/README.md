@@ -1,12 +1,14 @@
 # desktop
 
-桌面端宿主程序（Phase 2 已实现 native messaging 桥；Phase 3 起实现下载核心）。
+桌面端宿主程序（Phase 2 native messaging 桥 + Phase 3 多线程下载核心已完成）。
 
 ## 文件
 
 lib/protocol.mjs     消息帧编解码：4 字节小端长度 + UTF-8 JSON（Chrome 官方协议）
 host.mjs             宿主主体：读 stdin 帧 → 打印收到的 URL/Cookie/Referer/UA → 回 ack
 host.bat             启动器（Chrome 要求 path 指向可执行文件，经 .bat 转发给 node；已提交）
+lib/downloader.mjs   Range 多线程下载核心（探测/动态切分/断点续传/令牌桶限速/降级单线程）
+cli.mjs              下载器 CLI：node cli.mjs <url> [-o out] [-n 线程] [-l KB/s] [--cookie C] [--referer R] [-u UA] [--fresh]
 register-host.mjs    生成 native-host-manifest.json 并写入注册表（Chrome/Edge 两条路径）：
                      HKCU\Software\Google\Chrome\NativeMessagingHosts\com.downloader.sniffer
                      HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.downloader.sniffer
@@ -14,9 +16,13 @@ tests/               协议单测 + 宿主集成测试（spawn host.mjs 验证�
 
 ## 使用
 
+node cli.mjs https://proof.ovh.net/files/100Mb.dat -o 100MB.bin -n 8   # 多线程下载
+node cli.mjs <url> -l 4096 --cookie "..." --referer "..." -u "UA"        # 限速 + 透传请求头
+# 中断（Ctrl+C / 关窗口）后再次运行相同命令自动续传（<out>.meta.json 记录每段进度）
+
 npm run register      # 注册（生成 manifest，写入注册表）
 npm run unregister    # 注销
-npm test              # 运行测试
+npm test              # 运行测试（协议 + 宿主 + 下载器）
 
 注册后：扩展 popup 点「发送到桌面端」→ 宿主收到 capture 消息 → 回 ack；
 收到的 URL/Cookie/Referer/UA 打印在 desktop/host.log（同时输出 stderr）。

@@ -20,7 +20,9 @@ desktop/     桌面端（native messaging 宿主已就绪；下载核心 Phase 3
   lib/protocol.mjs   消息帧编解码（4 字节小端长度 + JSON）
   host.mjs / host.bat native messaging 宿主（stdio + stderr/文件日志）
   register-host.mjs  生成 manifest 并注册 Chrome/Edge 注册表
-  tests/             协议单测 + 宿主集成测试
+  lib/downloader.mjs Range 多线程下载核心（动态切分/续传/限速/降级单线程）
+  cli.mjs            下载器 CLI：node cli.mjs <url> [选项]
+  tests/             协议 + 宿主 + 下载器测试（本地服务器全链路）
 
 ## 环境
 
@@ -31,7 +33,7 @@ Node v22.19.0 / npm 10.9.3 / git 2.49.0；ffmpeg 已安装（Phase 4 使用）�
 
 - [x] **Phase 1：MVP 嗅探扩展**（已完成，待验收）
 - [x] **Phase 2：native messaging 桥**（已完成，待验收）
-- [ ] Phase 3：多线程下载核心（Range 分段 / 断点续传 / 动态线程）
+- [x] **Phase 3：多线程下载核心**（已完成，待验收）
 - [ ] Phase 4：流媒体（m3u8/mpd → 分片 → AES-128 解密 → ffmpeg 合并）
 - [ ] Phase 5：GUI 与打磨（可选）
 
@@ -58,6 +60,25 @@ Node v22.19.0 / npm 10.9.3 / git 2.49.0；ffmpeg 已安装（Phase 4 使用）�
 
 常见问题：按钮显示「宿主未注册」→ 先执行 npm run register；「宿主连接失败」→ 检查 node 在系统 PATH（宿主由浏览器启动，继承浏览器进程的环境变量）。
 
+## Phase 3 使用与验证（多线程下载核心）
+
+cd desktop
+
+# 多线程下载（默认 8 连接，自动动态切分）
+node cli.mjs https://proof.ovh.net/files/100Mb.dat -o 100MB.bin -n 8
+# 单线程对照
+node cli.mjs https://proof.ovh.net/files/100Mb.dat -o 100MB-single.bin -n 1 --fresh
+# 限速 4MB/s
+node cli.mjs <url> -o out.bin -n 8 -l 4096
+# 透传请求头（避免 403）
+node cli.mjs <url> --cookie "..." --referer "..." -u "UA"
+# 中断续传：下载中途 Ctrl+C 或关窗口，再次运行相同命令自动续传（<out>.meta.json 记录每段进度）
+
+验收点（自动化测试已覆盖并全部通过）：
+1. 多线程提速：受控限速服务器上单线程约 2s → 4 线程约 0.5s（可测量提速）；本机带宽饱和时两者接近属正常
+2. 断点续传：中断后再次运行从断点恢复，最终文件与完整下载 SHA256 一致（公开文件实测通过）
+3. 服务器不支持/忽略 Range 时自动降级单线程并正常完成；连接中途断开自动重试
+
 ## 开发
 
 cd extension
@@ -67,9 +88,10 @@ npm run watch      # 持续编译
 npm test           # 单元 + 冒烟测试（pretest 会自动先 build）
 
 # 桌面端（desktop/，无第三方依赖）
+npm run download -- <url> [-o 文件] [-n 线程] [-l KB/s] [--cookie C] [--referer R] [-u UA]
 npm run register    # 注册 native messaging 宿主（Chrome/Edge 注册表）
 npm run unregister  # 注销
-npm test            # 协议单测 + 宿主集成测试
+npm test            # 协议 + 宿主 + 下载器测试
 
 > dist/ 是构建产物，已提交以便直接加载；修改 src/ 后请重新构建并提交。
 
