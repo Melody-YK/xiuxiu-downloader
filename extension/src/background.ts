@@ -61,6 +61,8 @@ function schedulePersist(): void {
 
 // ---- 请求头嗅探：onBeforeSendHeaders 只读观察（Cookie/Referer/UA 需 extraHeaders） ----
 const headerCache = new Map<string, RequestHeaders>();
+/** URL 级请求头（tabId|url），供 hook 层按 URL 补全透传头 */
+const headersByUrl = new Map<string, RequestHeaders>();
 
 chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
@@ -71,9 +73,14 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
     const h = extractRequestHeaders(details.requestHeaders ?? []);
     if (h.cookie !== undefined || h.referer !== undefined || h.userAgent !== undefined) {
       headerCache.set(details.requestId, h);
+      headersByUrl.set(keyOf(details.tabId, url), h);
       if (headerCache.size > 2000) {
         const oldest = headerCache.keys().next().value;
         if (oldest !== undefined) headerCache.delete(oldest);
+      }
+      if (headersByUrl.size > 2000) {
+        const oldest = headersByUrl.keys().next().value;
+        if (oldest !== undefined) headersByUrl.delete(oldest);
       }
     }
   },
@@ -139,6 +146,47 @@ function parseSize(v: string | null): number | null {
   if (v === null || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+// 向页面主世界注入 fetch/XHR 钩子（第 3 层捕获，B站/YouTube 等 MSE 站点）
+function injectPageHook(sender: chrome.runtime.MessageSender): void {
+  const tabId = sender.tab?.id;
+  if (tabId === undefined) return;
+  const frameId = sender.frameId ?? 0;
+  chrome.scripting
+    .executeScript({ target: { tabId, frameIds: [frameId] }, world: 'MAIN', files: ['page-hook.js'] })
+    .catch((err) => {
+      console.warn('[sniffer] hook 注入失败', err);
+    });
+}
+
+// hook 层捕获的动态媒体 URL：分类入库（尽量补全请求头）
+async function applyHookUrl(url: string, sender: chrome.runtime.MessageSender): Promise<void> {
+  try {
+    await loaded;
+    if (!/^https?:\/\//i.test(url)) return;
+    const tabId = sender.tab?.id ?? -1;
+    if (tabId < 0) return;
+    const cls = classify(url, '');
+    if (!cls.isMedia || cls.type === null) return;
+    const key = keyOf(tabId, url);
+    const headers = headersByUrl.get(key);
+    if (headers !== undefined) headersByUrl.delete(key);
+    const result = applyCapture(state, {
+      url,
+      tabId,
+      contentType: '',
+      type: cls.type,
+      ext: cls.ext,
+      headers,
+    });
+    if (result.changed !== 'ignored') schedulePersist();
+    if (result.changed === 'added') {
+      console.log('[sniffer] hook 捕获', result.entry?.type, url.slice(0, 120));
+    }
+  } catch (err) {
+    console.warn('[sniffer] hook 处理失败', err);
+  }
 }
 
 // content script 的下载按钮：带上已捕获的请求头推送桌面端（GUI 自动建任务）
@@ -223,5 +271,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   if (t === 'content:download') {
     void handleContentDownload(message as { url?: unknown }, sender, sendResponse);
     return true; // 异步响应
+  }
+  if (t === 'hook:inject') {
+    injectPageHook(sender);
+    sendResponse({ ok: true });
+    return;
+  }
+  if (t === 'hook:url') {
+    const url = typeof (message as { url?: unknown }).url === 'string' ? ((message as { url?: string }).url ?? '') : '';
+    void applyHookUrl(url, sender);
+    sendResponse({ ok: true });
+    return;
   }
 });

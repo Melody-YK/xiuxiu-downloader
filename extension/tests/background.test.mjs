@@ -35,6 +35,13 @@ globalThis.chrome = {
     onChanged: makeEvent(),
   },
   webRequest: { onResponseStarted: makeEvent(), onBeforeSendHeaders: makeEvent() },
+  scripting: {
+    _calls: [],
+    executeScript(opts) {
+      globalThis.chrome.scripting._calls.push(opts);
+      return Promise.resolve([]);
+    },
+  },
   tabs: {
     async get(tabId) {
       const tabs = { 5: { url: 'https://page.example/watch', title: '测试页' } };
@@ -168,6 +175,33 @@ test('background：content 按钮下载 → connectNative 推送（带请求头 
   nativePorts[0].onMessage._emit({ type: 'ack', ok: true, count: 1 });
   await sleep(20);
   assert.deepEqual(resp, { ok: true });
+});
+
+test('background：hook 注入主世界 + hook 捕获动态 URL（带请求头）', async () => {
+  globalThis.chrome.scripting._calls.length = 0;
+  globalThis.chrome.runtime.onMessage._emit({ type: 'hook:inject' }, { tab: { id: 5 }, frameId: 0 }, () => {});
+  await sleep(20);
+  assert.equal(globalThis.chrome.scripting._calls.length, 1);
+  assert.equal(globalThis.chrome.scripting._calls[0].world, 'MAIN');
+  assert.deepEqual(globalThis.chrome.scripting._calls[0].files, ['page-hook.js']);
+
+  fireSendHeaders({
+    requestId: 'req-hook',
+    tabId: 5,
+    url: 'https://cdn.example/bili/playlist.m3u8',
+    requestHeaders: [{ name: 'Cookie', value: 'bili=1' }],
+  });
+  globalThis.chrome.runtime.onMessage._emit(
+    { type: 'hook:url', url: 'https://cdn.example/bili/playlist.m3u8' },
+    { tab: { id: 5 } },
+    () => {},
+  );
+  await sleep(600);
+  const stored = storageData[STORAGE_KEY];
+  const found = (stored?.entries ?? []).find((x) => x.url === 'https://cdn.example/bili/playlist.m3u8');
+  assert.ok(found, 'hook 捕获的动态 URL 应入库');
+  assert.equal(found.type, 'hls');
+  assert.equal(found.headers?.cookie, 'bili=1', '应按 URL 补全请求头');
 });
 
 test('background：popup 清空消息清空状态与存储', async () => {

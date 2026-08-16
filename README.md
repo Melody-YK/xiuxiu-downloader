@@ -116,7 +116,7 @@ npm run gui       # 启动图形界面
 3. 打开任意含 <video>/<audio> 直链的网页（如 https://test-videos.co.uk/bigbuckbunny/mp4-h264 点开一个视频）
 4. 视频左上角出现蓝色「⬇ 下载」按钮 → 点击 → 按钮变「✓ 已发送」→ GUI 自动开始下载（自动带上 Cookie/Referer/UA）
 
-（MSE/blob 流如 YouTube 不显示按钮，属已知边界；popup 捕获列表仍可用）
+（MSE/blob 流如 B站/YouTube 不显示按钮——video 标签里只有 blob:；此时用「第 3 层 Hook」：扩展会向页面主世界注入 fetch/XHR 拦截，动态请求的 m3u8/mpd/flv 分片地址会出现在 popup 捕获列表里，可「发送到桌面端」下载。DRM 流除外）
 
 自检：npm run gui -- --smoke（无窗口，验证 渲染层加载 + 模拟捕获推送端到端）
 

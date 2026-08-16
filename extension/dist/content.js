@@ -88,3 +88,13 @@ function attachButton(el) {
 const rootObserver = new MutationObserver(() => scheduleScan());
 rootObserver.observe(document.documentElement, { childList: true, subtree: true });
 scheduleScan();
+// ---- 第 3 层捕获：请求后台向主世界注入 fetch/XHR 钩子，并转发钩子回报的媒体 URL ----
+void chrome.runtime.sendMessage({ type: 'hook:inject' }).catch(() => undefined);
+window.addEventListener('message', (ev) => {
+    if (ev.source !== window)
+        return;
+    const data = ev.data;
+    if (data !== null && typeof data === 'object' && data.source === 'sniffer-page-hook' && typeof data.url === 'string') {
+        void chrome.runtime.sendMessage({ type: 'hook:url', url: data.url }).catch(() => undefined);
+    }
+});
