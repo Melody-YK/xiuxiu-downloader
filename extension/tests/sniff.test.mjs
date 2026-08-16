@@ -5,6 +5,7 @@ import {
   classify,
   createEmptyState,
   extOf,
+  extractMediaUrl,
   extractRequestHeaders,
   getHeader,
   MAX_ENTRIES,
@@ -127,6 +128,14 @@ test('applyCapture：请求头随条目保存并可补全', () => {
   assert.deepEqual(state.entries[0]?.headers, { cookie: 'sid=1', referer: 'https://p/' });
   applyCapture(state, cap({ url: 'https://a.com/v2.mp4', headers: { userAgent: 'UA' } }));
   assert.deepEqual(state.entries[0]?.headers, { userAgent: 'UA' });
+});
+
+test('extractMediaUrl：取 currentSrc/src/source 子元素，跳过 blob', () => {
+  assert.equal(extractMediaUrl({ currentSrc: 'blob:https://x/1', src: 'https://a.com/v.mp4' }), 'https://a.com/v.mp4');
+  assert.equal(extractMediaUrl({ currentSrc: 'https://a.com/cur.mp4', src: '' }), 'https://a.com/cur.mp4');
+  assert.equal(extractMediaUrl({ src: 'blob:https://x/2', children: [{ src: 'https://a.com/s.mp4' }] }), 'https://a.com/s.mp4');
+  assert.equal(extractMediaUrl({}), null);
+  assert.equal(extractMediaUrl({ src: 'data:video/mp4;base64,xxx' }), null);
 });
 
 test('applyCapture：列表条数上限', () => {

@@ -43,7 +43,7 @@ const parser = new FrameParser(
       }
     }
     if (msg !== null && typeof msg === 'object' && msg.type === 'capture') {
-      forwardToGui(Array.isArray(msg.entries) ? msg.entries : []);
+      forwardToGui(Array.isArray(msg.entries) ? msg.entries : [], msg.autoDownload === true);
     }
     for (const resp of handleMessage(msg)) {
       process.stdout.write(serializeMessage(resp));
@@ -62,8 +62,11 @@ process.stdin.on('error', (err) => {
 });
 
 // 若 GUI（Electron）在运行，把捕获推给它（127.0.0.1 HTTP）；未运行则静默忽略（仅保留日志）
-function forwardToGui(entries) {
-  const payload = Buffer.from(JSON.stringify({ type: 'capture', entries }), 'utf8');
+function forwardToGui(entries, autoDownload) {
+  const payload = Buffer.from(
+    JSON.stringify({ type: 'capture', entries, autoDownload: autoDownload === true }),
+    'utf8',
+  );
   const req = request(
     {
       host: '127.0.0.1',

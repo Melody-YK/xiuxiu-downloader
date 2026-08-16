@@ -1,6 +1,8 @@
 // Electron 主进程：窗口 + IPC + 扩展捕获接收（host.mjs 通过 http://127.0.0.1:17321/ingest 推送）
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { createServer, request } from 'node:http';
+import { readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JobManager } from '../lib/queue.mjs';
@@ -8,9 +10,15 @@ import { JobManager } from '../lib/queue.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 const INGEST_PORT = 17321;
 const smoke = process.argv.includes('--smoke');
+if (smoke) {
+  // 冒烟模式使用独立 userData：不与真实实例抢单实例锁，也不污染下载历史
+  app.setPath('userData', join(tmpdir(), 'dl-gui-smoke'));
+}
 const jobs = new JobManager({ maxConcurrent: 2 });
 const captures = [];
 let win = null;
+let historyPath = '';
+let historyTimer = null;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -24,7 +32,16 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    historyPath = join(app.getPath('userData'), 'history.json');
+    if (!smoke) {
+      try {
+        const raw = JSON.parse(await readFile(historyPath, 'utf8'));
+        jobs.restoreHistory(Array.isArray(raw) ? raw : []);
+      } catch {
+        // 无历史文件则忽略
+      }
+    }
     win = new BrowserWindow({
       width: 980,
       height: 660,
@@ -49,7 +66,8 @@ if (!gotLock) {
         const payload = Buffer.from(
           JSON.stringify({
             type: 'capture',
-            entries: [{ url: 'https://cdn.example/smoke.mp4', mediaType: 'video', cookie: 'c=1', referer: 'https://p/', userAgent: 'UA' }],
+            autoDownload: true,
+            entries: [{ url: 'http://127.0.0.1:9/smoke.mp4', mediaType: 'video', cookie: 'c=1', referer: 'https://p/', userAgent: 'UA' }],
           }),
           'utf8',
         );
@@ -68,8 +86,8 @@ if (!gotLock) {
                 void win.webContents
                   .executeJavaScript('typeof window.api + "|" + document.getElementById("cap-count").textContent + "|" + document.getElementById("tasks").childElementCount')
                   .then((txt) => {
-                    console.log('[smoke] 捕获条目数=' + captures.length + ' 渲染层[api|cap-count|task行数]=' + txt);
-                    app.exit(captures.length === 1 && txt.includes('|1|') ? 0 : 1);
+                    console.log('[smoke] 捕获条目数=' + captures.length + ' 任务数=' + jobs.getSnapshot().length + ' 渲染层[api|cap-count|task行数]=' + txt);
+                    app.exit(captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') ? 0 : 1);
                   });
               }, 400);
             });
@@ -105,8 +123,9 @@ function startIngestServer() {
     });
     req.on('end', () => {
       let entries = [];
+      let msg = { autoDownload: false };
       try {
-        const msg = JSON.parse(body);
+        msg = JSON.parse(body);
         entries = Array.isArray(msg.entries) ? msg.entries : [];
       } catch {
         res.writeHead(400);
@@ -126,6 +145,18 @@ function startIngestServer() {
           userAgent: e.userAgent ?? '',
           at: Date.now(),
         });
+        // 网页下载按钮（autoDownload）直达：自动建立下载任务并带上请求头
+        if (msg.autoDownload === true && typeof e.url === 'string' && e.url !== '') {
+          const headers = {};
+          if (e.cookie) headers.Cookie = e.cookie;
+          if (e.referer) headers.Referer = e.referer;
+          if (e.userAgent) headers['User-Agent'] = e.userAgent;
+          jobs.add({
+            url: e.url,
+            kind: e.mediaType === 'hls' || e.mediaType === 'dash' ? 'media' : 'auto',
+            headers,
+          });
+        }
       }
       if (captures.length > 100) captures.length = 100;
       if (win !== null && !win.isDestroyed()) {
@@ -162,4 +193,18 @@ ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot(), captures }
 
 jobs.on('event', (ev) => {
   if (win !== null && !win.isDestroyed()) win.webContents.send('task:event', ev);
+  if (!smoke) scheduleSaveHistory();
 });
+
+// 历史持久化：仅保存终态任务（done/error/canceled），最多 200 条
+function scheduleSaveHistory() {
+  if (historyTimer !== null) return;
+  historyTimer = setTimeout(() => {
+    historyTimer = null;
+    const finished = jobs
+      .getSnapshot()
+      .filter((t) => t.status === 'done' || t.status === 'error' || t.status === 'canceled')
+      .slice(-200);
+    writeFile(historyPath, JSON.stringify(finished), 'utf8').catch(() => {});
+  }, 800);
+}

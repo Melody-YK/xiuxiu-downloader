@@ -13,7 +13,7 @@
 
 extension/   MV3 扩展（Chrome/Edge 通用）
   manifest.json / popup.html / popup.css
-  src/        TypeScript 源码（background 捕获 + popup UI + lib 纯逻辑）
+  src/        TypeScript 源码（background 捕获 + popup UI + content script 下载按钮 + lib 纯逻辑）
   tests/      单元测试 + background 冒烟测试（node --test，mock chrome API）
   dist/       tsc 构建产物（已提交，可直接加载）
 desktop/     桌面端（native messaging 宿主已就绪；下载核心 Phase 3 起）
@@ -107,7 +107,16 @@ npm install       # 首次需要（安装 electron）
 npm run gui       # 启动图形界面
 
 功能：粘贴/拖入 URL 下载（自动识别直链与 m3u8/mpd）、任务队列与进度/速度显示、取消、打开文件位置、限速与线程数设置；
-「扩展捕获」标签实时接收扩展推送（保持 GUI 运行，popup 点「发送到桌面端」），一键下载自动带上 Cookie/Referer/UA。
+「扩展捕获」标签实时接收扩展推送，一键下载自动带上 Cookie/Referer/UA；下载历史持久化（重启后仍可见）。
+
+### IDM 式体验（网页内下载按钮）
+
+1. Edge 重新加载扩展（新增了 content script）
+2. 保持 GUI 运行（npm run gui）
+3. 打开任意含 <video>/<audio> 直链的网页（如 https://test-videos.co.uk/bigbuckbunny/mp4-h264 点开一个视频）
+4. 视频左上角出现蓝色「⬇ 下载」按钮 → 点击 → 按钮变「✓ 已发送」→ GUI 自动开始下载（自动带上 Cookie/Referer/UA）
+
+（MSE/blob 流如 YouTube 不显示按钮，属已知边界；popup 捕获列表仍可用）
 
 自检：npm run gui -- --smoke（无窗口，验证 渲染层加载 + 模拟捕获推送端到端）
 

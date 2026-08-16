@@ -5,6 +5,7 @@ import {
   extOf,
   extractRequestHeaders,
   getHeader,
+  NATIVE_HOST_NAME,
   STORAGE_KEY,
   type Capture,
   type CaptureState,
@@ -140,6 +141,59 @@ function parseSize(v: string | null): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+// content script 的下载按钮：带上已捕获的请求头推送桌面端（GUI 自动建任务）
+async function handleContentDownload(
+  msg: { url?: unknown },
+  sender: chrome.runtime.MessageSender,
+  sendResponse: (resp: { ok: boolean; error?: string }) => void,
+): Promise<void> {
+  try {
+    const url = typeof msg.url === 'string' ? msg.url : '';
+    if (!/^https?:\/\//i.test(url)) {
+      sendResponse({ ok: false, error: '无效 URL' });
+      return;
+    }
+    const tabId = sender.tab?.id ?? -1;
+    const entry = state.entries.find((e) => e.tabId === tabId && e.url === url);
+    const payload = {
+      url,
+      mediaType: entry?.type ?? (classify(url, '').type ?? 'video'),
+      contentType: entry?.contentType ?? '',
+      size: entry?.size ?? null,
+      pageUrl: entry?.pageUrl ?? '',
+      pageTitle: entry?.pageTitle ?? '',
+      cookie: entry?.headers?.cookie ?? '',
+      referer: entry?.headers?.referer ?? '',
+      userAgent: entry?.headers?.userAgent ?? '',
+    };
+    const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+    const ok = await new Promise<boolean>((resolve) => {
+      let done = false;
+      const finish = (v: boolean): void => {
+        if (done) return;
+        done = true;
+        resolve(v);
+        try {
+          port.disconnect();
+        } catch {
+          // 忽略
+        }
+      };
+      port.onMessage.addListener((m: unknown) => {
+        if (typeof m === 'object' && m !== null && (m as { type?: unknown }).type === 'ack') finish(true);
+      });
+      port.onDisconnect.addListener(() => {
+        if (chrome.runtime.lastError !== undefined) finish(false);
+      });
+      port.postMessage({ type: 'capture', entries: [payload], autoDownload: true });
+      setTimeout(() => finish(false), 3000);
+    });
+    sendResponse({ ok });
+  } catch {
+    sendResponse({ ok: false, error: '宿主未连接' });
+  }
+}
+
 async function getPageInfo(tabId: number, fallbackUrl: string): Promise<{ url: string; title: string }> {
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -149,9 +203,11 @@ async function getPageInfo(tabId: number, fallbackUrl: string): Promise<{ url: s
   }
 }
 
-// ---- popup 消息 ----
-chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  if (typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'clear') {
+// ---- 消息：popup 清空 / content script 下载请求 ----
+chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+  if (typeof message !== 'object' || message === null) return;
+  const t = (message as { type?: unknown }).type;
+  if (t === 'clear') {
     state = createEmptyState();
     memoryDedupe.clear();
     pendingWrite = pendingWrite.then(async () => {
@@ -162,5 +218,10 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
       }
     });
     sendResponse({ ok: true });
+    return;
+  }
+  if (t === 'content:download') {
+    void handleContentDownload(message as { url?: unknown }, sender, sendResponse);
+    return true; // 异步响应
   }
 });

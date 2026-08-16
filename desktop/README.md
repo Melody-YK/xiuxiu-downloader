@@ -16,7 +16,7 @@ lib/merge.mjs        分片合并 + ffmpeg 转封装
 media-cli.mjs        流媒体 CLI：node media-cli.mjs <m3u8|mpd 地址> [-o out.mp4] [--variant N] [--list]
 lib/pipeline.mjs      流媒体管线（CLI 与 GUI 共用）
 lib/queue.mjs         下载任务队列（并发限制/取消/进度事件）
-gui/                  Electron GUI：npm run gui 启动（扩展捕获经 host.mjs → 127.0.0.1:17321 推送）
+gui/                  Electron GUI：npm run gui 启动（扩展捕获经 host.mjs → 127.0.0.1:17321 推送；autoDownload 标记自动建任务）
 register-host.mjs    生成 native-host-manifest.json 并写入注册表（Chrome/Edge 两条路径）：
                      HKCU\Software\Google\Chrome\NativeMessagingHosts\com.downloader.sniffer
                      HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.downloader.sniffer

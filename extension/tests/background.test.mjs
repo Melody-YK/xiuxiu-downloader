@@ -43,8 +43,27 @@ globalThis.chrome = {
       return tab;
     },
   },
-  runtime: { onMessage: makeEvent() },
+  runtime: {
+    onMessage: makeEvent(),
+    connectNative(name) {
+      const port = {
+        name,
+        posted: [],
+        postMessage(m) {
+          port.posted.push(m);
+        },
+        disconnect() {
+          port.disconnected = true;
+        },
+        onMessage: makeEvent(),
+        onDisconnect: makeEvent(),
+      };
+      nativePorts.push(port);
+      return port;
+    },
+  },
 };
+const nativePorts = [];
 
 // ---- 加载真实的 service worker 代码（注册监听器） ----
 await import('../dist/background.js');
@@ -115,6 +134,40 @@ test('background：请求头捕获 → webRequest 过滤 → 聚合 → 持久�
   const hls = stored.entries.find((e) => e.type === 'hls');
   assert.equal(hls?.segmentCount, 2, '两个不同分片各计一次，重复分片不重复计数');
   assert.equal(hls?.headers, null, '未捕获到请求头的条目 headers 为 null');
+});
+
+test('background：content 按钮下载 → connectNative 推送（带请求头 + autoDownload）', async () => {
+  // 先捕获一个带请求头的视频条目
+  fireSendHeaders({
+    requestId: 'req-btn',
+    tabId: 5,
+    url: 'https://cdn.example/btn.mp4',
+    requestHeaders: [{ name: 'Cookie', value: 'btn=1' }, { name: 'Referer', value: 'https://page.example/' }],
+  });
+  fireResponse(mediaRes({ requestId: 'req-btn', url: 'https://cdn.example/btn.mp4' }));
+  await sleep(100); // 等条目异步入队（tabs.get → applyCapture）
+
+  let resp = null;
+  globalThis.chrome.runtime.onMessage._emit(
+    { type: 'content:download', url: 'https://cdn.example/btn.mp4' },
+    { tab: { id: 5 } },
+    (r) => {
+      resp = r;
+    },
+  );
+  await sleep(50);
+  assert.equal(nativePorts.length, 1, '应建立 native 连接');
+  const msg = nativePorts[0].posted[0];
+  assert.equal(msg.type, 'capture');
+  assert.equal(msg.autoDownload, true);
+  assert.equal(msg.entries.length, 1);
+  assert.equal(msg.entries[0].url, 'https://cdn.example/btn.mp4');
+  assert.equal(msg.entries[0].cookie, 'btn=1', '应带上捕获到的 Cookie');
+  assert.equal(msg.entries[0].referer, 'https://page.example/');
+  // 宿主回 ack 后按钮显示成功
+  nativePorts[0].onMessage._emit({ type: 'ack', ok: true, count: 1 });
+  await sleep(20);
+  assert.deepEqual(resp, { ok: true });
 });
 
 test('background：popup 清空消息清空状态与存储', async () => {

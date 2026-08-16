@@ -3,6 +3,8 @@
 // 因此这里不得依赖 chrome.* 或任何浏览器专属 API。
 /** chrome.storage 键名 */
 export const STORAGE_KEY = 'capturedMedia';
+/** 与 desktop/register-host.mjs 中的宿主名保持一致 */
+export const NATIVE_HOST_NAME = 'com.downloader.sniffer';
 /** 捕获列表条数上限（防止 storage 配额与 popup 渲染压力） */
 export const MAX_ENTRIES = 200;
 /** 近期分片键保留数量 */
@@ -55,6 +57,23 @@ export function getHeader(headers, name) {
         if (h.name !== undefined && h.name.toLowerCase() === want) {
             return h.value ?? null;
         }
+    }
+    return null;
+}
+/** 从 <video>/<audio> 元素提取可下载的媒体地址（跳过 blob:/data:，兼容 MSE 占位） */
+export function extractMediaUrl(el) {
+    const candidates = [el.currentSrc, el.src];
+    if (el.children !== undefined) {
+        for (let i = 0; i < el.children.length; i += 1) {
+            const child = el.children[i];
+            if (typeof child === 'object' && child !== null && 'src' in child) {
+                candidates.push(child.src);
+            }
+        }
+    }
+    for (const c of candidates) {
+        if (typeof c === 'string' && c !== '' && /^https?:\/\//i.test(c))
+            return c;
     }
     return null;
 }

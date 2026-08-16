@@ -91,6 +91,32 @@ export class JobManager extends EventEmitter {
     return Array.from(this.tasks.values()).map((t) => this.snapshotOf(t));
   }
 
+  /** 恢复历史记录（重启后展示已完成/失败/取消的任务，不重新排队） */
+  restoreHistory(items) {
+    for (const it of items ?? []) {
+      if (typeof it?.id !== 'number' || this.tasks.has(it.id)) continue;
+      const t = {
+        id: it.id,
+        url: it.url ?? '',
+        out: it.out ?? '',
+        headers: {},
+        kind: it.kind ?? 'auto',
+        isMedia: it.isMedia === true,
+        threads: 8,
+        limitBytesPerSec: undefined,
+        status: it.status === 'error' || it.status === 'canceled' ? it.status : 'done',
+        progress: null,
+        phase: it.phase ?? '',
+        error: it.error ?? null,
+        createdAt: it.createdAt ?? Date.now(),
+        finishedAt: it.finishedAt ?? null,
+        abort: null,
+      };
+      this.tasks.set(t.id, t);
+      this.nextId = Math.max(this.nextId, t.id + 1);
+    }
+  }
+
   snapshotOf(t) {
     return {
       id: t.id,

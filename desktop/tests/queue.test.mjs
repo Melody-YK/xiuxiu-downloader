@@ -163,6 +163,23 @@ test('错误任务：404 → status=error 且带错误信息', async () => {
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 
+test('restoreHistory：恢复已完成任务且不重新排队', () => {
+  const jobs = new JobManager({ maxConcurrent: 2 });
+  jobs.restoreHistory([
+    { id: 7, url: 'https://a.com/v.mp4', out: 'C:\\tmp\\v.mp4', kind: 'file', isMedia: false, status: 'done', createdAt: 1000, finishedAt: 2000 },
+    { id: 8, url: 'https://a.com/x.m3u8', out: 'C:\\tmp\\x.mp4', kind: 'media', isMedia: true, status: 'error', error: '403', createdAt: 3000, finishedAt: 4000 },
+  ]);
+  const snap = jobs.getSnapshot();
+  assert.equal(snap.length, 2);
+  assert.equal(snap[0].status, 'done');
+  assert.equal(snap[1].status, 'error');
+  // 新任务 id 不与历史冲突
+  const id = jobs.add({ url: 'https://a.com/n.mp4', kind: 'file' });
+  assert.equal(id, 9);
+  assert.equal(jobs.getSnapshot().length, 3);
+  assert.equal(jobs.getSnapshot()[0].status, 'done', '历史任务不参与排队');
+});
+
 test('media 任务：本地 m3u8 → mp4（需 ffmpeg）', { skip: !hasFfmpeg }, async () => {
   const dir = join(TMP, 'media');
   await mkdir(dir, { recursive: true });

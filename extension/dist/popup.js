@@ -1,4 +1,4 @@
-import { STORAGE_KEY } from './lib/sniff.js';
+import { NATIVE_HOST_NAME, STORAGE_KEY } from './lib/sniff.js';
 const TYPE_LABEL = {
     video: '视频',
     audio: '音频',
@@ -191,8 +191,6 @@ function formatTime(ts) {
     const p = (x) => String(x).padStart(2, '0');
     return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 }
-/** 与 desktop/register-host.mjs 中的宿主名保持一致 */
-const NATIVE_HOST_NAME = 'com.downloader.sniffer';
 async function sendToDesktop() {
     const entries = await readEntries();
     if (entries.length === 0) {
