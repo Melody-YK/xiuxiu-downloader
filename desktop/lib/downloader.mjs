@@ -233,19 +233,18 @@ export class Downloader {
     for (let i = 0; i < nWorkers; i += 1) workers.push(worker());
 
     const results = await Promise.allSettled(workers);
-    const rejected = results.find((r) => r.status === 'rejected');
-    if (rejected !== undefined) {
-      const reason = rejected.reason;
-      if (reason instanceof DownloadError && reason.code === 'NO_RANGE') {
-        // 服务器中途忽略 Range：降级单线程重下
-        this.fallbackSingle = true;
-        await this.allocFile(p.total);
-        await unlink(this.metaPath).catch(() => {});
-        this.state = null;
-        return this.downloadSingle(p, false);
-      }
-      throw reason;
+    const rejections = results.filter((r) => r.status === 'rejected').map((r) => r.reason);
+    // 在全部失败原因中查找 NO_RANGE（其它线程可能因 multiAbort 先报 AbortError，顺序不固定）
+    const noRange = rejections.find((r) => r instanceof DownloadError && r.code === 'NO_RANGE');
+    if (noRange !== undefined) {
+      // 服务器中途忽略 Range：降级单线程重下
+      this.fallbackSingle = true;
+      await this.allocFile(p.total);
+      await unlink(this.metaPath).catch(() => {});
+      this.state = null;
+      return this.downloadSingle(p, false);
     }
+    if (rejections.length > 0) throw rejections[0];
     if (segments.some((s) => s.cursor <= s.end)) {
       throw new DownloadError('分段未全部完成', 'INCOMPLETE');
     }

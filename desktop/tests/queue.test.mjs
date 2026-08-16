@@ -48,6 +48,7 @@ function startServer(files, delayMs = 0) {
       let i = 0;
       res.writeHead(200, { 'Content-Length': String(buf.length) });
       const push = () => {
+        if (res.destroyed || res.writableEnded) return; // 客户端中断后停止，避免挂起
         if (i >= parts.length) {
           res.end();
           return;

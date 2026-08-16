@@ -86,7 +86,10 @@ function startServer(opts) {
       let pos = start;
       let served = 0;
       const chunk = Buffer.allocUnsafe(Math.min(chunkSize, 1024 * 1024));
+      const closed = new Promise((resolve) => res2.once('close', resolve));
       for (;;) {
+        // 客户端中断后 socket 已销毁：停止写入，避免 await drain 永久挂起
+        if (res2.destroyed || res2.writableEnded) return;
         const n = Math.min(chunk.length, start + len - pos);
         if (n <= 0) break;
         for (let i = 0; i < n; i += 1) chunk[i] = patternByte(pos + i);
@@ -95,13 +98,13 @@ function startServer(opts) {
           return;
         }
         if (!res2.write(chunk.subarray(0, n))) {
-          await new Promise((resolve) => res2.once('drain', resolve));
+          await Promise.race([new Promise((resolve) => res2.once('drain', resolve)), closed]);
         }
         pos += n;
         served += n;
         if (delayMs > 0) await sleep(delayMs);
       }
-      res2.end();
+      if (!res2.destroyed && !res2.writableEnded) res2.end();
     };
 
     if (noRange || advertiseRangeButIgnore) {
@@ -285,10 +288,13 @@ test('服务器声明 Range 但实际忽略：中途降级单线程且内容完�
   const size = 4 * 1024 * 1024;
   const srv = await startServer({ size, advertiseRangeButIgnore: true });
   const out = join(TMP, 'ignore-range.bin');
-  const r = await new Downloader({ url: srv.url, out, connections: 4, fresh: true }).download();
-  assert.equal(r.fallbackSingle, true);
-  assert.equal(await sha256File(out), expectedHash(size));
-  await srv.close();
+  try {
+    const r = await new Downloader({ url: srv.url, out, connections: 4, fresh: true }).download();
+    assert.equal(r.fallbackSingle, true);
+    assert.equal(await sha256File(out), expectedHash(size));
+  } finally {
+    await srv.close();
+  }
 });
 
 test('动态切分在途段：进度恰好等于总量（不重复计数）', async () => {
