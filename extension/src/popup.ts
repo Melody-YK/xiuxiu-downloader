@@ -85,7 +85,8 @@ async function updateDebugInfo(entries: Entry[]): Promise<void> {
     let line = '诊断 | 页面: ' + (tab.url ?? '?') + ' | bvid: ' + (tabBvid !== '' ? tabBvid : '(未识别)') + ' | 标题: ' + (title !== '' ? title : '(空/默认)');
     const streamEntry = entries.find((e) => e.type === 'stream' && e.segmentUrls !== undefined && e.segmentUrls.length > 0);
     if (streamEntry !== undefined) {
-      const last = streamEntry.segmentUrls[streamEntry.segmentUrls.length - 1] ?? '';
+      const urls = streamEntry.segmentUrls ?? [];
+      const last = urls.length > 0 ? (urls[urls.length - 1] ?? '') : '';
       line += ' | 分片流 ' + streamEntry.segmentCount + ' 片 末片: ' + last;
     }
     debugEl.textContent = line;

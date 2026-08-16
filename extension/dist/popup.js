@@ -67,8 +67,8 @@ async function enrichTitles(entries) {
         return entries;
     }
 }
-// 诊断信息：帮助在真实站点上定位标题缺失问题
-async function updateDebugInfo() {
+// 诊断信息：帮助在真实站点上定位问题
+async function updateDebugInfo(entries) {
     try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         const tab = tabs[0];
@@ -78,8 +78,14 @@ async function updateDebugInfo() {
         }
         const tabBvid = tab.url !== undefined ? bvidFromPageUrl(tab.url) : '';
         const title = cleanBiliTitle(tab.title ?? '');
-        debugEl.textContent =
-            '诊断 | 页面: ' + (tab.url ?? '?') + ' | bvid: ' + (tabBvid !== '' ? tabBvid : '(未识别)') + ' | 标题: ' + (title !== '' ? title : '(空/默认)');
+        let line = '诊断 | 页面: ' + (tab.url ?? '?') + ' | bvid: ' + (tabBvid !== '' ? tabBvid : '(未识别)') + ' | 标题: ' + (title !== '' ? title : '(空/默认)');
+        const streamEntry = entries.find((e) => e.type === 'stream' && e.segmentUrls !== undefined && e.segmentUrls.length > 0);
+        if (streamEntry !== undefined) {
+            const urls = streamEntry.segmentUrls ?? [];
+            const last = urls.length > 0 ? (urls[urls.length - 1] ?? '') : '';
+            line += ' | 分片流 ' + streamEntry.segmentCount + ' 片 末片: ' + last;
+        }
+        debugEl.textContent = line;
     }
     catch {
         debugEl.textContent = '诊断: 读取标签页失败';
@@ -107,7 +113,7 @@ async function render() {
     const entries = await prepareEntries();
     listEl.replaceChildren();
     countEl.textContent = String(entries.length) + ' 条';
-    void updateDebugInfo();
+    void updateDebugInfo(entries);
     if (entries.length === 0) {
         listEl.append(buildEmpty());
         return;
