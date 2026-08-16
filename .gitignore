@@ -8,3 +8,5 @@ desktop/*.mp4
 desktop/*.ts
 desktop/*.parts/
 desktop/output.mp4
+desktop/dist/
+desktop/发布版/
