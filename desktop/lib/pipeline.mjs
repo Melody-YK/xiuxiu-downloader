@@ -4,7 +4,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { parseMasterPlaylist, parseMediaPlaylist } from './hls.mjs';
 import { parseMpd, probeSegmentCount } from './dash.mjs';
 import { downloadSegments } from './segments.mjs';
-import { concatFiles, ffmpegMuxAV, ffmpegRemux } from './merge.mjs';
+import { concatFiles, ffmpegConcat, ffmpegMuxAV, ffmpegRemux } from './merge.mjs';
 import { Downloader } from './downloader.mjs';
 import { isBiliPlayurlUrl, parseBiliPlayurl } from './bili.mjs';
 
@@ -32,10 +32,8 @@ async function downloadStream(opts) {
   await rm(workDir, { recursive: true, force: true });
   const tasks = urls.map((u) => ({ url: u, byterange: null, key: null, map: null }));
   const files = await downloadSegments(tasks, { headers, connections, workDir, signal, onProgress });
-  onPhase('合并分片');
-  const merged = await concatFiles(files, join(workDir, 'merged.mp4'));
-  onPhase('ffmpeg 转封装');
-  await ffmpegRemux(merged, out);
+  onPhase('ffmpeg 拼接分片');
+  await ffmpegConcat(files, out);
   if (!keep) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   return { out, kind: 'stream', segments: urls.length, label: '分片流' };
 }
