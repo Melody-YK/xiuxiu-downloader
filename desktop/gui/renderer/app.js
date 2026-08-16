@@ -60,6 +60,19 @@ function switchTab(which) {
 tabDlBtn.addEventListener('click', () => switchTab('dl'));
 tabCapBtn.addEventListener('click', () => switchTab('cap'));
 
+// ---- 设置 ----
+const sMaxEl = document.getElementById('s-max');
+const sThreadsEl = document.getElementById('s-threads');
+const fThreadsEl = document.getElementById('f-threads');
+
+sMaxEl.addEventListener('change', () => {
+  void bridge.setSettings({ maxConcurrent: Number(sMaxEl.value) || 2 });
+});
+sThreadsEl.addEventListener('change', () => {
+  void bridge.setSettings({ defaultThreads: Number(sThreadsEl.value) || 8 });
+  fThreadsEl.value = String(Number(sThreadsEl.value) || 8);
+});
+
 // ---- 添加任务 ----
 document.getElementById('add-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -360,6 +373,14 @@ function fmtSize(n) {
 
 // ---- 启动：恢复快照 + 订阅事件 ----
 void (async () => {
+  try {
+    const s = await bridge.getSettings();
+    sMaxEl.value = String(s.maxConcurrent ?? 2);
+    sThreadsEl.value = String(s.defaultThreads ?? 8);
+    fThreadsEl.value = String(s.defaultThreads ?? 8);
+  } catch {
+    // 忽略设置读取失败
+  }
   const snap = await bridge.getSnapshot();
   for (const t of snap.tasks) upsertTask(t);
   state.captures = snap.captures ?? [];

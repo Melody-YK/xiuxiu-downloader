@@ -16,8 +16,10 @@ if (smoke) {
 }
 const jobs = new JobManager({ maxConcurrent: 2 });
 const captures = [];
+const settings = { maxConcurrent: 2, defaultThreads: 8 };
 let win = null;
 let historyPath = '';
+let settingsPath = '';
 let historyTimer = null;
 
 const gotLock = app.requestSingleInstanceLock();
@@ -34,7 +36,16 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     historyPath = join(app.getPath('userData'), 'history.json');
+    settingsPath = join(app.getPath('userData'), 'settings.json');
     if (!smoke) {
+      try {
+        const raw = JSON.parse(await readFile(settingsPath, 'utf8'));
+        if (typeof raw?.maxConcurrent === 'number') settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(raw.maxConcurrent)));
+        if (typeof raw?.defaultThreads === 'number') settings.defaultThreads = Math.max(1, Math.min(32, Math.round(raw.defaultThreads)));
+      } catch {
+        // 无设置文件则用默认值
+      }
+      jobs.setMaxConcurrent(settings.maxConcurrent);
       try {
         const raw = JSON.parse(await readFile(historyPath, 'utf8'));
         jobs.restoreHistory(Array.isArray(raw) ? raw : []);
@@ -269,6 +280,18 @@ ipcMain.handle('util:chooseSavePath', async (_e, opts) => {
   return r.canceled ? null : r.filePath;
 });
 ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot(), captures }));
+ipcMain.handle('settings:get', () => ({ ...settings }));
+ipcMain.handle('settings:set', async (_e, opts) => {
+  if (typeof opts?.maxConcurrent === 'number') {
+    settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(opts.maxConcurrent)));
+    jobs.setMaxConcurrent(settings.maxConcurrent);
+  }
+  if (typeof opts?.defaultThreads === 'number') {
+    settings.defaultThreads = Math.max(1, Math.min(32, Math.round(opts.defaultThreads)));
+  }
+  await writeFile(settingsPath, JSON.stringify(settings), 'utf8').catch(() => {});
+  return { ...settings };
+});
 
 jobs.on('event', (ev) => {
   if (win !== null && !win.isDestroyed()) win.webContents.send('task:event', ev);

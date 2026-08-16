@@ -17,6 +17,11 @@
 
   <div id="err-banner" hidden></div>
   <main id="view-dl">
+    <details id="settings-panel">
+      <summary>设置</summary>
+      <div class="hdr-row"><label>同时任务数 (1-8)</label><input id="s-max" type="number" min="1" max="8" value="2" title="同时进行的下载任务数"></div>
+      <div class="hdr-row"><label>默认线程数 (1-32)</label><input id="s-threads" type="number" min="1" max="32" value="8" title="新任务的默认每任务连接数"></div>
+    </details>
     <form id="add-form">
       <input id="f-url" class="grow" placeholder="粘贴 http(s) 链接（直链 / m3u8 / mpd），也可直接拖入" required>
       <select id="f-kind" title="任务类型">

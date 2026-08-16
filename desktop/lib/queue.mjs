@@ -60,6 +60,12 @@ export class JobManager extends EventEmitter {
     this.nextId = 1;
   }
 
+  /** 运行中调整全局并发数（1-8），立即生效 */
+  setMaxConcurrent(n) {
+    this.maxConcurrent = Math.max(1, Math.min(8, Math.round(Number(n) || 1)));
+    this.pump();
+  }
+
   add(task) {
     const id = this.nextId;
     this.nextId += 1;

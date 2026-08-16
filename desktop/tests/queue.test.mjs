@@ -188,6 +188,20 @@ test('错误任务：404 → status=error 且带错误信息', async () => {
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 
+test('setMaxConcurrent：运行中调整并发立即生效', async () => {
+  const src = makeFile(2 * 1024 * 1024);
+  const { base, server } = await startServer({ 'f.bin': src }, 20); // 慢服务器
+  const jobs = new JobManager({ maxConcurrent: 1 });
+  jobs.add({ url: base + 'f.bin', out: join(TMP, 'mc-a.bin'), kind: 'file', threads: 1 });
+  jobs.add({ url: base + 'f.bin', out: join(TMP, 'mc-b.bin'), kind: 'file', threads: 1 });
+  await waitFor(() => jobs.getSnapshot().filter((t) => t.status === 'running').length === 1);
+  assert.equal(jobs.getSnapshot()[1].status, 'queued', '并发 1 时第二个任务应排队');
+  jobs.setMaxConcurrent(2);
+  await waitFor(() => jobs.getSnapshot().filter((t) => t.status === 'running').length === 2, 5000);
+  await waitFor(() => jobs.getSnapshot().every((t) => t.status === 'done'), 20000);
+  server.close();
+});
+
 test('remove：删除排队与已完成任务并发出 removed 事件', async () => {
   const jobs = new JobManager({ maxConcurrent: 1 });
   const events = [];

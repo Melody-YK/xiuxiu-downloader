@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('api', {
   removeCapture: (url) => ipcRenderer.invoke('capture:remove', url),
   chooseSavePath: (opts) => ipcRenderer.invoke('util:chooseSavePath', opts),
   getSnapshot: () => ipcRenderer.invoke('app:getSnapshot'),
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSettings: (s) => ipcRenderer.invoke('settings:set', s),
   onTaskEvent: (cb) => ipcRenderer.on('task:event', (_e, ev) => cb(ev)),
   onCapture: (cb) => ipcRenderer.on('capture:new', (_e, entries) => cb(entries)),
 });
