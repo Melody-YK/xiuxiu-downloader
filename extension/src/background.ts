@@ -43,6 +43,17 @@ function keyOf(tabId: number, url: string): string {
   return String(tabId) + '|' + url;
 }
 
+/** 从 B站 playurl 地址提取视频标识（bvid/ep_id/aid），用于按视频分条 */
+function bvidFromUrl(url: string): string {
+  const m = /[?&]bvid=([A-Za-z0-9]+)/.exec(url);
+  if (m !== null) return m[1] ?? '';
+  const e = /[?&]ep_id=(\d+)/.exec(url);
+  if (e !== null) return 'ep' + (e[1] ?? '');
+  const a = /[?&]aid=(\d+)/.exec(url);
+  if (a !== null) return 'av' + (a[1] ?? '');
+  return '';
+}
+
 /** 防抖持久化：HLS 分片请求密集，不能每次都全量写 storage */
 function schedulePersist(): void {
   if (writeTimer !== null) return;
@@ -124,6 +135,9 @@ async function handleResponse(details: chrome.webRequest.OnResponseStartedDetail
 
     const size = parseSize(getHeader(headers, 'content-length'));
     const page = await getPageInfo(details.tabId, details.initiator ?? '');
+    const bvid = isBiliPlayurl ? bvidFromUrl(url) : '';
+    let pageTitle = page.title;
+    if (isBiliPlayurl) pageTitle = pageTitle.replace(/_哔哩哔哩_bilibili\s*$/i, '').trim();
 
     const capture: Capture = {
       url,
@@ -132,10 +146,10 @@ async function handleResponse(details: chrome.webRequest.OnResponseStartedDetail
       type: isBiliPlayurl ? 'dash' : (cls.type ?? 'video'),
       ext: cls.ext,
       headers: reqHeaders,
-      dedupeKey: isBiliPlayurl ? 'bili-playurl' : undefined,
+      dedupeKey: isBiliPlayurl ? 'bili:' + (bvid !== '' ? bvid : 'playurl') : undefined,
       size,
       pageUrl: page.url,
-      pageTitle: page.title,
+      pageTitle,
     };
     const result = applyCapture(state, capture);
     if (result.changed !== 'ignored') schedulePersist();
@@ -166,7 +180,12 @@ function injectPageHook(sender: chrome.runtime.MessageSender): void {
 }
 
 // hook 层捕获的动态媒体 URL：分类入库（尽量补全请求头）
-async function applyHookUrl(url: string, sender: chrome.runtime.MessageSender): Promise<void> {
+async function applyHookUrl(
+  url: string,
+  sender: chrome.runtime.MessageSender,
+  bvid?: string,
+  title?: string,
+): Promise<void> {
   try {
     await loaded;
     if (!/^https?:\/\//i.test(url)) return;
@@ -178,6 +197,7 @@ async function applyHookUrl(url: string, sender: chrome.runtime.MessageSender): 
     const key = keyOf(tabId, url);
     const headers = headersByUrl.get(key);
     if (headers !== undefined) headersByUrl.delete(key);
+    const bid = isBili ? (bvid !== undefined && bvid !== '' ? bvid : bvidFromUrl(url) || 'playurl') : '';
     const result = applyCapture(state, {
       url,
       tabId,
@@ -185,7 +205,8 @@ async function applyHookUrl(url: string, sender: chrome.runtime.MessageSender): 
       type: isBili ? 'dash' : (cls.type ?? 'video'),
       ext: cls.ext,
       headers,
-      dedupeKey: isBili ? 'bili-playurl' : undefined,
+      dedupeKey: isBili ? 'bili:' + bid : undefined,
+      pageTitle: isBili ? (title ?? '') : undefined,
     });
     if (result.changed !== 'ignored') schedulePersist();
     if (result.changed === 'added') {
@@ -285,8 +306,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return;
   }
   if (t === 'hook:url') {
-    const url = typeof (message as { url?: unknown }).url === 'string' ? ((message as { url?: string }).url ?? '') : '';
-    void applyHookUrl(url, sender);
+    const m = message as { url?: unknown; bvid?: unknown; title?: unknown };
+    const url = typeof m.url === 'string' ? m.url : '';
+    void applyHookUrl(url, sender, typeof m.bvid === 'string' ? m.bvid : undefined, typeof m.title === 'string' ? m.title : undefined);
     sendResponse({ ok: true });
     return;
   }

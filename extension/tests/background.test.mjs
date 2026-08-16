@@ -255,6 +255,22 @@ test('background：webRequest 兜底捕获 B站 wbi playurl 接口（带 Cookie�
   assert.equal(found[0].headers?.cookie, 'SESSDATA=y');
 });
 
+test('background：hook 按 bvid 区分不同视频并记录标题', async () => {
+  const emit = (url, bvid, title) =>
+    globalThis.chrome.runtime.onMessage._emit({ type: 'hook:url', url, bvid, title }, { tab: { id: 6 } }, () => {});
+  emit('https://api.bilibili.com/x/player/wbi/playurl?bvid=BVAAA&cid=1', 'BVAAA', '视频甲');
+  emit('https://api.bilibili.com/x/player/wbi/playurl?bvid=BVBBB&cid=1', 'BVBBB', '');
+  emit('https://api.bilibili.com/x/player/wbi/playurl?bvid=BVAAA&cid=2&sig=new', 'BVAAA', '视频甲');
+  await sleep(600);
+  const entries = (storageData[STORAGE_KEY]?.entries ?? []).filter((x) => x.tabId === 6 && x.url.includes('playurl'));
+  assert.equal(entries.length, 2, '两个不同 bvid 应各一条，实际 ' + entries.length);
+  const a = entries.find((x) => x.url.includes('sig=new'));
+  assert.ok(a, 'BVAAA 应保留最新地址');
+  assert.equal(a.pageTitle, '视频甲');
+  const b = entries.find((x) => x.url.includes('BVBBB'));
+  assert.equal(b.pageTitle, '', '预览视频不贴主视频标题');
+});
+
 test('background：popup 清空消息清空状态与存储', async () => {
   let response = null;
   globalThis.chrome.runtime.onMessage._emit({ type: 'clear' }, {}, (v) => {

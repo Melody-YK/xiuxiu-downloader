@@ -29,6 +29,14 @@ export function ensureMp4Ext(name) {
   return /\.mp4$/i.test(name) ? name : name + '.mp4';
 }
 
+/** 文件名清洗：去掉 Windows 非法字符，限长，防空白 */
+export function sanitizeFileName(name) {
+  let s = String(name ?? '').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim();
+  if (s.length > 80) s = s.slice(0, 80);
+  s = s.replace(/[. ]+$/, '');
+  return s === '' ? 'download' : s;
+}
+
 export class JobManager extends EventEmitter {
   constructor(opts = {}) {
     super();

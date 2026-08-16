@@ -3,9 +3,9 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { createServer, request } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { JobManager } from '../lib/queue.mjs';
+import { JobManager, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const smoke = process.argv.includes('--smoke');
@@ -151,9 +151,12 @@ function startIngestServer() {
           if (e.cookie) headers.Cookie = e.cookie;
           if (e.referer) headers.Referer = e.referer;
           if (e.userAgent) headers['User-Agent'] = e.userAgent;
+          const kind = e.mediaType === 'hls' || e.mediaType === 'dash' ? 'media' : 'auto';
           jobs.add({
             url: e.url,
-            kind: e.mediaType === 'hls' || e.mediaType === 'dash' ? 'media' : 'auto',
+            out: outForTask({ kind, out: null }, e.url),
+            outDir: app.getPath('downloads'),
+            kind,
             headers,
           });
         }
@@ -173,12 +176,31 @@ function startIngestServer() {
   server.listen(INGEST_PORT, '127.0.0.1');
 }
 
+// 捕获条目带标题时用标题作文件名（如 B站视频名），否则保持默认命名
+function outForTask(task, url) {
+  if (task?.out) return task.out;
+  const cap = captures.find((c) => c.url === url);
+  const title = cap?.pageTitle?.trim();
+  if (title === undefined || title === '') return null;
+  const kind = task?.kind ?? 'auto';
+  const isMedia = kind === 'media' || (kind === 'auto' && isMediaUrl(url));
+  let ext = '.mp4';
+  if (!isMedia) {
+    try {
+      ext = extname(new URL(url).pathname) || '.bin';
+    } catch {
+      ext = '.bin';
+    }
+  }
+  return join(app.getPath('downloads'), sanitizeFileName(title) + ext);
+}
+
 ipcMain.handle('task:add', (_e, task) => {
   const url = String(task?.url ?? '').trim();
   if (!/^https?:\/\//i.test(url)) return { ok: false, error: '链接无效（需要 http(s) 开头）' };
   const id = jobs.add({
     url,
-    out: task?.out ?? null,
+    out: outForTask(task, url),
     outDir: app.getPath('downloads'),
     headers: task?.headers ?? {},
     kind: task?.kind ?? 'auto',

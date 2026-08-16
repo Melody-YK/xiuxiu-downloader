@@ -68,7 +68,7 @@ function buildRow(entry: Entry): HTMLElement {
 
   const name = document.createElement('span');
   name.className = 'name';
-  name.textContent = fileNameOf(entry.url);
+  name.textContent = entry.pageTitle !== '' ? entry.pageTitle : fileNameOf(entry.url);
   name.title = entry.url;
 
   head.append(badge, name);

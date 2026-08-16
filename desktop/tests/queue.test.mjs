@@ -5,7 +5,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { JobManager, isMediaUrl } from '../lib/queue.mjs';
+import { JobManager, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
 import { sleep } from '../lib/downloader.mjs';
 
 const TMP = join(tmpdir(), 'queue-test-' + process.pid);
@@ -93,6 +93,14 @@ test('isMediaUrl：识别 m3u8/mpd', () => {
   assert.equal(isMediaUrl('https://a.com/x.m3u8?token=1'), true);
   assert.equal(isMediaUrl('https://a.com/x.mpd'), true);
   assert.equal(isMediaUrl('https://a.com/x.mp4'), false);
+});
+
+test('sanitizeFileName：清洗非法字符与限长', () => {
+  assert.equal(sanitizeFileName('1桶半™≠ 一桶半！教你识别"心机商标"'), '1桶半™≠ 一桶半！教你识别_心机商标_');
+  assert.equal(sanitizeFileName('a/b:c*d?e<f>g|h'), 'a_b_c_d_e_f_g_h');
+  assert.equal(sanitizeFileName('   '), 'download');
+  assert.equal(sanitizeFileName('x'.repeat(200)).length, 80);
+  assert.equal(sanitizeFileName('结尾有空格和点.. '), '结尾有空格和点');
 });
 
 test('file 任务：排队 → 进度事件 → 完成且内容正确', async () => {

@@ -101,8 +101,10 @@ void chrome.runtime.sendMessage({ type: 'hook:inject' }).catch(() => undefined);
 
 window.addEventListener('message', (ev) => {
   if (ev.source !== window) return;
-  const data = ev.data as { source?: unknown; url?: unknown } | null;
+  const data = ev.data as { source?: unknown; url?: unknown; bvid?: unknown; title?: unknown } | null;
   if (data !== null && typeof data === 'object' && data.source === 'sniffer-page-hook' && typeof data.url === 'string') {
-    void chrome.runtime.sendMessage({ type: 'hook:url', url: data.url }).catch(() => undefined);
+    void chrome.runtime
+      .sendMessage({ type: 'hook:url', url: data.url, bvid: typeof data.bvid === 'string' ? data.bvid : '', title: typeof data.title === 'string' ? data.title : '' })
+      .catch(() => undefined);
   }
 });

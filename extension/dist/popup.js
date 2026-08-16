@@ -60,7 +60,7 @@ function buildRow(entry) {
     badge.textContent = TYPE_LABEL[entry.type];
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = fileNameOf(entry.url);
+    name.textContent = entry.pageTitle !== '' ? entry.pageTitle : fileNameOf(entry.url);
     name.title = entry.url;
     head.append(badge, name);
     const meta = document.createElement('div');
