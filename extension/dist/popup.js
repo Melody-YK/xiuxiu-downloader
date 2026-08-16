@@ -32,26 +32,32 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         void render();
 });
 void render();
-// B站标题兜底：playurl 请求发生在页面加载早期（标签页标题还是默认值），
-// 用 popup 打开时的「当前活动标签页实时标题」补全并回写存储，发送给 GUI 时即带上真实标题
-async function enrichBiliTitles(entries) {
+// 标题补全（两种模式）：
+// - B站：按 bvid 精确匹配（预览视频不贴标题）
+// - 通用站点：条目属于当前活动标签页且标题为空时，用实时标签页标题补全
+async function enrichTitles(entries) {
     try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         const tab = tabs[0];
         if (tab === undefined || tab.url === undefined)
             return entries;
         const tabBvid = bvidFromPageUrl(tab.url);
-        if (tabBvid === '')
-            return entries;
-        const title = cleanBiliTitle(tab.title ?? '');
-        if (title === '')
-            return entries;
+        const rawTitle = tab.title ?? '';
         return entries.map((e) => {
-            // 匹配：内部逻辑键 或 URL 里的 bvid 参数（双保险）
-            const matches = e.dedupeKey === 'bili:' + tabBvid || bvidFromPlayurl(e.url) === tabBvid;
-            if (matches && e.pageTitle !== title) {
-                void chrome.runtime.sendMessage({ type: 'entry:title', url: e.url, title });
-                return { ...e, pageTitle: title };
+            if (tabBvid !== '') {
+                const matches = e.dedupeKey === 'bili:' + tabBvid || bvidFromPlayurl(e.url) === tabBvid;
+                if (matches) {
+                    const title = cleanBiliTitle(rawTitle);
+                    if (title !== '' && e.pageTitle !== title) {
+                        void chrome.runtime.sendMessage({ type: 'entry:title', url: e.url, title });
+                        return { ...e, pageTitle: title };
+                    }
+                }
+                return e;
+            }
+            if (e.tabId === tab.id && e.pageTitle === '' && rawTitle !== '') {
+                void chrome.runtime.sendMessage({ type: 'entry:title', url: e.url, title: rawTitle });
+                return { ...e, pageTitle: rawTitle };
             }
             return e;
         });
@@ -90,7 +96,7 @@ async function readEntries() {
 async function prepareEntries() {
     const all = await readEntries();
     let entries = all.filter((e) => e.type !== 'ts');
-    entries = await enrichBiliTitles(entries);
+    entries = await enrichTitles(entries);
     // 补全之后再隐藏：无标题的 B站 playurl 条目是推荐预览视频，不展示
     const isBili = (e) => (e.dedupeKey ?? '').startsWith('bili:') || /bilibili\.com\//.test(e.url);
     entries = entries.filter((e) => !(isBili(e) && e.pageTitle === ''));

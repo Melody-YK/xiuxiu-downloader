@@ -177,7 +177,7 @@ function startIngestServer() {
   server.listen(INGEST_PORT, '127.0.0.1');
 }
 
-// 捕获条目带标题时用标题作文件名（如 B站视频名），否则保持默认命名
+// 捕获条目带标题时用标题作文件名（如 B站视频名），否则保持默认命名；同名自动加序号
 function outForTask(task, url) {
   if (task?.out) return task.out;
   const cap = captures.find((c) => c.url === url);
@@ -193,7 +193,13 @@ function outForTask(task, url) {
       ext = '.bin';
     }
   }
-  return join(app.getPath('downloads'), sanitizeFileName(title) + ext);
+  let candidate = join(app.getPath('downloads'), sanitizeFileName(title) + ext);
+  let n = 2;
+  while (jobs.getSnapshot().some((t) => t.out === candidate)) {
+    candidate = join(app.getPath('downloads'), sanitizeFileName(title) + ' (' + n + ')' + ext);
+    n += 1;
+  }
+  return candidate;
 }
 
 ipcMain.handle('task:add', (_e, task) => {
