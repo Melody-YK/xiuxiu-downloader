@@ -1,4 +1,4 @@
-import { NATIVE_HOST_NAME, STORAGE_KEY, type Entry, type MediaType } from './lib/sniff.js';
+import { bvidFromPageUrl, cleanBiliTitle, NATIVE_HOST_NAME, STORAGE_KEY, type Entry, type MediaType } from './lib/sniff.js';
 
 const TYPE_LABEL: Record<MediaType, string> = {
   video: '视频',
@@ -36,6 +36,29 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 void render();
 
+// B站标题兜底：playurl 请求发生在页面加载早期（标签页标题还是默认值），
+// 用 popup 打开时的「当前活动标签页实时标题」补全并回写存储，发送给 GUI 时即带上真实标题
+async function enrichBiliTitles(entries: Entry[]): Promise<Entry[]> {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (tab === undefined || tab.url === undefined) return entries;
+    const tabBvid = bvidFromPageUrl(tab.url);
+    if (tabBvid === '') return entries;
+    const title = cleanBiliTitle(tab.title ?? '');
+    if (title === '') return entries;
+    return entries.map((e) => {
+      if (e.dedupeKey === 'bili:' + tabBvid && e.pageTitle !== title) {
+        void chrome.runtime.sendMessage({ type: 'entry:title', url: e.url, title });
+        return { ...e, pageTitle: title };
+      }
+      return e;
+    });
+  } catch {
+    return entries;
+  }
+}
+
 async function readEntries(): Promise<Entry[]> {
   const data = await chrome.storage.local.get(STORAGE_KEY);
   const raw: unknown = data[STORAGE_KEY];
@@ -47,7 +70,8 @@ async function readEntries(): Promise<Entry[]> {
 async function render(): Promise<void> {
   const all = await readEntries();
   // 隐藏不可下载的分片条目（ts 类型），分片计数已聚合在 HLS/DASH 条目上
-  const entries = all.filter((e) => e.type !== 'ts');
+  let entries = all.filter((e) => e.type !== 'ts');
+  entries = await enrichBiliTitles(entries);
   listEl.replaceChildren();
   countEl.textContent = String(entries.length) + ' 条';
   if (entries.length === 0) {

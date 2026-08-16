@@ -1,4 +1,4 @@
-import { applyCapture, bvidFromPageUrl, bvidFromPlayurl, classify, createEmptyState, extOf, extractRequestHeaders, getHeader, NATIVE_HOST_NAME, STORAGE_KEY, } from './lib/sniff.js';
+import { applyCapture, bvidFromPageUrl, bvidFromPlayurl, classify, cleanBiliTitle, createEmptyState, extOf, extractRequestHeaders, getHeader, NATIVE_HOST_NAME, STORAGE_KEY, } from './lib/sniff.js';
 // ---- 状态管理：内存为唯一事实源，chrome.storage 为持久化镜像 ----
 let state = createEmptyState();
 /** SW 生命周期内的快速去重（持久化去重依赖 state.entries / segmentKeys） */
@@ -56,12 +56,6 @@ function schedulePersist() {
 // ---- 请求头嗅探：onBeforeSendHeaders 只读观察（Cookie/Referer/UA 需 extraHeaders） ----
 /** B站播放地址接口（无媒体扩展名，但必须透传请求头；含 WBI 签名路径） */
 const BILI_PLAYURL_RE = /bilibili\.com\/(x\/player\/(wbi\/)?playurl|pgc\/player\/web\/playurl)/i;
-/** B站页面尚未加载视频信息时的默认标签页标题（视为无效标题） */
-const BILI_DEFAULT_TITLE = '哔哩哔哩 (゜-゜)つロ 干杯~-bilibili';
-function cleanBiliTitle(t) {
-    const s = t.replace(/_哔哩哔哩_bilibili\s*$/i, '').trim();
-    return s === BILI_DEFAULT_TITLE || s === '' ? '' : s;
-}
 const headerCache = new Map();
 /** URL 级请求头（tabId|url），供 hook 层按 URL 补全透传头 */
 const headersByUrl = new Map();
@@ -294,6 +288,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (t === 'hook:inject') {
         injectPageHook(sender);
+        sendResponse({ ok: true });
+        return;
+    }
+    if (t === 'entry:title') {
+        const m = message;
+        const url = typeof m.url === 'string' ? m.url : '';
+        const title = typeof m.title === 'string' ? m.title : '';
+        if (url !== '' && title !== '') {
+            const e = state.entries.find((x) => x.url === url);
+            if (e !== undefined) {
+                e.pageTitle = title;
+                schedulePersist();
+            }
+        }
         sendResponse({ ok: true });
         return;
     }

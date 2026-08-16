@@ -283,6 +283,36 @@ test('background：entry:remove 删除单个捕获条目', async () => {
   assert.equal(found, undefined, '指定条目应被删除');
 });
 
+test('background：entry:title 回写条目标题', async () => {
+  // 先捕获一条 bili 条目（走 webRequest 兜底路径，标题为空）
+  fireSendHeaders({
+    requestId: 'req-t1',
+    tabId: 7,
+    url: 'https://api.bilibili.com/x/player/wbi/playurl?bvid=BVT1&cid=1',
+    requestHeaders: [{ name: 'Cookie', value: 'c=1' }],
+  });
+  fireResponse(
+    mediaRes({
+      requestId: 'req-t1',
+      tabId: 7,
+      url: 'https://api.bilibili.com/x/player/wbi/playurl?bvid=BVT1&cid=1',
+      responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+    }),
+  );
+  await sleep(600);
+  let found = (storageData[STORAGE_KEY]?.entries ?? []).find((x) => x.url.includes('BVT1'));
+  assert.equal(found.pageTitle, '');
+
+  globalThis.chrome.runtime.onMessage._emit(
+    { type: 'entry:title', url: 'https://api.bilibili.com/x/player/wbi/playurl?bvid=BVT1&cid=1', title: '补全后的标题' },
+    {},
+    () => {},
+  );
+  await sleep(600);
+  found = (storageData[STORAGE_KEY]?.entries ?? []).find((x) => x.url.includes('BVT1'));
+  assert.equal(found.pageTitle, '补全后的标题', '标题应回写并持久化');
+});
+
 test('background：popup 清空消息清空状态与存储', async () => {
   let response = null;
   globalThis.chrome.runtime.onMessage._emit({ type: 'clear' }, {}, (v) => {

@@ -74,6 +74,13 @@ export function bvidFromPlayurl(url) {
     return '';
 }
 /** 从 B站页面地址提取视频标识（/video/BVxxx、/ep123、/av123） */
+/** B站页面尚未加载视频信息时的默认标签页标题（视为无效标题） */
+export const BILI_DEFAULT_TITLE = '哔哩哔哩 (゜-゜)つロ 干杯~-bilibili';
+/** 清理 B站标签页标题：去后缀；默认标题视为空 */
+export function cleanBiliTitle(t) {
+    const s = t.replace(/_哔哩哔哩_bilibili\s*$/i, '').trim();
+    return s === BILI_DEFAULT_TITLE || s === '' ? '' : s;
+}
 export function bvidFromPageUrl(url) {
     const m = /\/video\/(BV[0-9A-Za-z]+)/.exec(url);
     if (m !== null)

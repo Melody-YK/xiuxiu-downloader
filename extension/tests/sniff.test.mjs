@@ -5,6 +5,7 @@ import {
   bvidFromPageUrl,
   bvidFromPlayurl,
   classify,
+  cleanBiliTitle,
   createEmptyState,
   extOf,
   extractMediaUrl,
@@ -160,6 +161,12 @@ test('applyCapture：dedupeKey 更新时非空标题覆盖、空标题保留原�
   assert.equal(state.entries[0]?.pageTitle, '真实标题', '新捕获带有效标题应覆盖');
   applyCapture(state, cap({ url: 'https://b.b/p?sig=3', type: 'dash', dedupeKey: 'k', pageTitle: '' }));
   assert.equal(state.entries[0]?.pageTitle, '真实标题', '空标题不应覆盖已有标题');
+});
+
+test('cleanBiliTitle：去后缀、默认标题视为空', () => {
+  assert.equal(cleanBiliTitle('胖龙做一锅筋头巴脑_哔哩哔哩_bilibili'), '胖龙做一锅筋头巴脑');
+  assert.equal(cleanBiliTitle('哔哩哔哩 (゜-゜)つロ 干杯~-bilibili'), '');
+  assert.equal(cleanBiliTitle('普通页面标题'), '普通页面标题');
 });
 
 test('bvid 提取：playurl 查询参数与页面路径', () => {
