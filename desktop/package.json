@@ -5,7 +5,7 @@
   "type": "module",
   "main": "gui/main.mjs",
   "author": "downloader-dev",
-  "description": "嗅探下载器桌面端宿主（native messaging）+ 下载核心 + Electron GUI",
+  "description": "嗅嗅下载器桌面端宿主（native messaging）+ 下载核心 + Electron GUI",
   "scripts": {
     "gui": "electron .",
     "pack": "electron-builder --win portable",
@@ -17,10 +17,10 @@
   },
   "build": {
     "appId": "com.downloader.sniffer",
-    "productName": "嗅探下载器",
+    "productName": "嗅嗅下载器",
     "files": ["gui/**/*", "lib/**/*", "package.json"],
     "win": { "target": ["portable"] },
-    "portable": { "artifactName": "sniffer-downloader-${version}-portable.exe" },
+    "portable": { "artifactName": "xiuxiu-downloader-${version}-portable.exe" },
     "electronLanguages": ["zh-CN", "en-US"]
   },
   "devDependencies": {

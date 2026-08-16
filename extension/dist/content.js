@@ -48,7 +48,7 @@ function attachButton(el) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = '⬇ 下载';
-    btn.title = '下载此媒体（嗅探下载器）';
+    btn.title = '下载此媒体（嗅嗅下载器）';
     btn.style.cssText =
         'position:fixed;z-index:2147483647;display:none;padding:4px 10px;border:none;border-radius:6px;' +
             'background:#0969da;color:#fff;font:12px/1.4 system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);';

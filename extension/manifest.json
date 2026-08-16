@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "嗅探下载器",
-  "short_name": "嗅探下载",
+  "name": "嗅嗅下载器",
+  "short_name": "嗅嗅",
   "version": "0.1.0",
   "description": "通用媒体嗅探器：捕获网页中的视频/音频/HLS/DASH 地址，配合桌面端多线程下载器使用。",
   "permissions": [
@@ -27,7 +27,7 @@
     }
   ],
   "action": {
-    "default_title": "嗅探下载器",
+    "default_title": "嗅嗅下载器",
     "default_popup": "popup.html"
   }
 }

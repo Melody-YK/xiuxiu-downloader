@@ -28,7 +28,7 @@ if (process.argv.includes('--unregister')) {
 
 const manifest = {
   name: HOST_NAME,
-  description: 'Sniffer Downloader native messaging host',
+  description: 'Xiuxiu Downloader native messaging host',
   path: launcher,
   type: 'stdio',
   // 未打包扩展的 ID 随机器/路径变化，Phase 2 用通配符放开；后续可按需收紧

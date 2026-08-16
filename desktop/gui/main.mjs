@@ -46,7 +46,7 @@ if (!gotLock) {
       width: 980,
       height: 660,
       show: !smoke,
-      title: '嗅探下载器',
+      title: '嗅嗅下载器',
       autoHideMenuBar: true,
       webPreferences: {
         preload: join(here, 'preload.cjs'),
