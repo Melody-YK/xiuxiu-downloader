@@ -58,6 +58,20 @@ export function getHeader(headers, name) {
     }
     return null;
 }
+/** 从 requestHeaders 提取透传所需的 Cookie/Referer/User-Agent */
+export function extractRequestHeaders(headers) {
+    const out = {};
+    const cookie = getHeader(headers, 'cookie');
+    if (cookie !== null)
+        out.cookie = cookie;
+    const referer = getHeader(headers, 'referer');
+    if (referer !== null)
+        out.referer = referer;
+    const ua = getHeader(headers, 'user-agent');
+    if (ua !== null)
+        out.userAgent = ua;
+    return out;
+}
 export function createEmptyState() {
     return { nextId: 1, entries: [], segmentKeys: [] };
 }
@@ -75,6 +89,8 @@ export function applyCapture(state, cap) {
         existing.lastSeenAt = at;
         if (cap.size != null && existing.size == null)
             existing.size = cap.size;
+        if (cap.headers !== undefined)
+            existing.headers = { ...existing.headers, ...cap.headers };
         moveToFront(state, existing);
         return { changed: 'updated', entry: existing };
     }
@@ -109,6 +125,7 @@ export function applyCapture(state, cap) {
         pageTitle: cap.pageTitle ?? '',
         contentType: cap.contentType,
         ext: cap.ext ?? null,
+        headers: cap.headers ?? null,
         size: cap.size ?? null,
         segmentCount: cap.type === 'ts' ? 1 : 0,
         createdAt: at,

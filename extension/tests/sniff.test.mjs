@@ -5,6 +5,7 @@ import {
   classify,
   createEmptyState,
   extOf,
+  extractRequestHeaders,
   getHeader,
   MAX_ENTRIES,
 } from '../dist/lib/sniff.js';
@@ -101,6 +102,31 @@ test('applyCapture：segmentKeys 持久化，模拟 SW 重启后不重复计数'
   restored.segmentKeys = state.segmentKeys;
   applyCapture(restored, cap({ url: 'https://a.com/seg1.ts', type: 'ts', contentType: 'video/mp2t' }));
   assert.equal(restored.entries.find((e) => e.type === 'hls')?.segmentCount, 1);
+});
+
+test('extractRequestHeaders：提取 Cookie/Referer/UA', () => {
+  const headers = [
+    { name: 'Cookie', value: 'sid=abc' },
+    { name: 'Referer', value: 'https://page.example/' },
+    { name: 'User-Agent', value: 'UA/1.0' },
+    { name: 'Accept', value: '*/*' },
+  ];
+  assert.deepEqual(extractRequestHeaders(headers), {
+    cookie: 'sid=abc',
+    referer: 'https://page.example/',
+    userAgent: 'UA/1.0',
+  });
+  assert.deepEqual(extractRequestHeaders([]), {});
+});
+
+test('applyCapture：请求头随条目保存并可补全', () => {
+  const state = createEmptyState();
+  applyCapture(state, cap({ url: 'https://a.com/v.mp4' }));
+  assert.equal(state.entries[0]?.headers, null);
+  applyCapture(state, cap({ url: 'https://a.com/v.mp4', headers: { cookie: 'sid=1', referer: 'https://p/' } }));
+  assert.deepEqual(state.entries[0]?.headers, { cookie: 'sid=1', referer: 'https://p/' });
+  applyCapture(state, cap({ url: 'https://a.com/v2.mp4', headers: { userAgent: 'UA' } }));
+  assert.deepEqual(state.entries[0]?.headers, { userAgent: 'UA' });
 });
 
 test('applyCapture：列表条数上限', () => {

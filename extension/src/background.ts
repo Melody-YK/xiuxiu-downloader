@@ -2,10 +2,13 @@ import {
   applyCapture,
   classify,
   createEmptyState,
+  extOf,
+  extractRequestHeaders,
   getHeader,
   STORAGE_KEY,
   type Capture,
   type CaptureState,
+  type RequestHeaders,
 } from './lib/sniff.js';
 
 // ---- 状态管理：内存为唯一事实源，chrome.storage 为持久化镜像 ----
@@ -55,6 +58,28 @@ function schedulePersist(): void {
   }, 300);
 }
 
+// ---- 请求头嗅探：onBeforeSendHeaders 只读观察（Cookie/Referer/UA 需 extraHeaders） ----
+const headerCache = new Map<string, RequestHeaders>();
+
+chrome.webRequest.onBeforeSendHeaders.addListener(
+  (details) => {
+    if (details.tabId < 0) return;
+    const url = details.url ?? '';
+    if (!/^https?:\/\//i.test(url)) return;
+    if (extOf(url) === null) return; // 仅缓存疑似媒体请求，避免全量开销
+    const h = extractRequestHeaders(details.requestHeaders ?? []);
+    if (h.cookie !== undefined || h.referer !== undefined || h.userAgent !== undefined) {
+      headerCache.set(details.requestId, h);
+      if (headerCache.size > 2000) {
+        const oldest = headerCache.keys().next().value;
+        if (oldest !== undefined) headerCache.delete(oldest);
+      }
+    }
+  },
+  { urls: ['<all_urls>'] },
+  ['requestHeaders', 'extraHeaders'],
+);
+
 // ---- 网络嗅探：MV3 中 webRequest 只读观察 ----
 chrome.webRequest.onResponseStarted.addListener(
   (details) => {
@@ -82,6 +107,9 @@ async function handleResponse(details: chrome.webRequest.OnResponseStartedDetail
     memoryDedupe.add(dedupeKey);
     if (memoryDedupe.size > 20000) memoryDedupe.clear();
 
+    const reqHeaders = headerCache.get(details.requestId);
+    if (reqHeaders !== undefined) headerCache.delete(details.requestId);
+
     const size = parseSize(getHeader(headers, 'content-length'));
     const page = await getPageInfo(details.tabId, details.initiator ?? '');
 
@@ -91,6 +119,7 @@ async function handleResponse(details: chrome.webRequest.OnResponseStartedDetail
       contentType,
       type: cls.type,
       ext: cls.ext,
+      headers: reqHeaders,
       size,
       pageUrl: page.url,
       pageTitle: page.title,

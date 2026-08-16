@@ -1,0 +1,12 @@
+{
+  "name": "@downloader/desktop",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "嗅探下载器桌面端宿主（native messaging）+ 下载核心（Phase 3 起）",
+  "scripts": {
+    "register": "node register-host.mjs",
+    "unregister": "node register-host.mjs --unregister",
+    "test": "node --test tests/protocol.test.mjs tests/host.test.mjs"
+  }
+}

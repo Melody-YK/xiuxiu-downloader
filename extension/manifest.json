@@ -7,7 +7,8 @@
   "permissions": [
     "webRequest",
     "storage",
-    "tabs"
+    "tabs",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "<all_urls>"

@@ -16,7 +16,11 @@ extension/   MV3 扩展（Chrome/Edge 通用）
   src/        TypeScript 源码（background 捕获 + popup UI + lib 纯逻辑）
   tests/      单元测试 + background 冒烟测试（node --test，mock chrome API）
   dist/       tsc 构建产物（已提交，可直接加载）
-desktop/     桌面端（Phase 2 起实现：native messaging 宿主 + 下载核心）
+desktop/     桌面端（native messaging 宿主已就绪；下载核心 Phase 3 起）
+  lib/protocol.mjs   消息帧编解码（4 字节小端长度 + JSON）
+  host.mjs / host.bat native messaging 宿主（stdio + stderr/文件日志）
+  register-host.mjs  生成 manifest 并注册 Chrome/Edge 注册表
+  tests/             协议单测 + 宿主集成测试
 
 ## 环境
 
@@ -26,7 +30,7 @@ Node v22.19.0 / npm 10.9.3 / git 2.49.0；ffmpeg 已安装（Phase 4 使用）�
 ## 阶段进度
 
 - [x] **Phase 1：MVP 嗅探扩展**（已完成，待验收）
-- [ ] Phase 2：native messaging 桥（推送 URL + Cookie/Referer/UA）
+- [x] **Phase 2：native messaging 桥**（已完成，待验收）
 - [ ] Phase 3：多线程下载核心（Range 分段 / 断点续传 / 动态线程）
 - [ ] Phase 4：流媒体（m3u8/mpd → 分片 → AES-128 解密 → ffmpeg 合并）
 - [ ] Phase 5：GUI 与打磨（可选）
@@ -44,13 +48,28 @@ Node v22.19.0 / npm 10.9.3 / git 2.49.0；ffmpeg 已安装（Phase 4 使用）�
 
 预期结果：视频页捕获到「视频」条目；HLS 播放页捕获到「HLS」清单条目，且「分片 ×N」随播放增长。
 
+## Phase 2 验证步骤（native messaging 桥）
+
+1. 注册宿主：cd desktop && npm run register（无需依赖；生成 native-host-manifest.json 并写入 Chrome/Edge 两条注册表路径）
+2. Edge 重新加载扩展（manifest 新增了 nativeMessaging 权限）：edge://extensions → 扩展卡片上点「重新加载」
+3. 打开测试视频页重新播放几秒（让请求经过新增的请求头监听，条目带上 Cookie/Referer/UA）
+4. popup 点「发送到桌面端」：按钮应显示「已发送 N 条」
+5. 查看 desktop/host.log（或手动运行 node desktop/host.mjs 观察控制台）：每条 URL + Cookie/Referer/UA 应被打印
+
+常见问题：按钮显示「宿主未注册」→ 先执行 npm run register；「宿主连接失败」→ 检查 node 在系统 PATH（宿主由浏览器启动，继承浏览器进程的环境变量）。
+
 ## 开发
 
 cd extension
 npm install        # 安装 typescript / @types/chrome
 npm run build      # 编译 src → dist（改动源码后需重新 build，再在浏览器里点「重新加载」）
 npm run watch      # 持续编译
-npm test           # 纯逻辑单元测试（pretest 会自动先 build）
+npm test           # 单元 + 冒烟测试（pretest 会自动先 build）
+
+# 桌面端（desktop/，无第三方依赖）
+npm run register    # 注册 native messaging 宿主（Chrome/Edge 注册表）
+npm run unregister  # 注销
+npm test            # 协议单测 + 宿主集成测试
 
 > dist/ 是构建产物，已提交以便直接加载；修改 src/ 后请重新构建并提交。
 
@@ -60,6 +79,7 @@ npm test           # 纯逻辑单元测试（pretest 会自动先 build）
 - 当前仅捕获 http(s) 媒体请求；blob:/MSE 流（如 YouTube）需后续 Hook 层。
 - DRM（Widevine/PlayReady）明确不支持；m3u8 的 AES-128 属于可解密范围（Phase 4）。
 - 扩展声明 <all_urls> 权限，安装时的权限警告属正常现象。
+- nativeMessaging 权限同样有安装警告，属正常；宿主注册在 HKCU（当前用户），卸载用 desktop 的 npm run unregister。
 
 ## 测试资源
 

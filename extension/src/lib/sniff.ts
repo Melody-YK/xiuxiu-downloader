@@ -12,6 +12,13 @@ export interface Classification {
   ext: string | null;
 }
 
+/** 请求头透传信息（桌面端下载时带回 Cookie/Referer/UA） */
+export interface RequestHeaders {
+  cookie?: string;
+  referer?: string;
+  userAgent?: string;
+}
+
 export interface Entry {
   id: number;
   type: MediaType;
@@ -21,6 +28,8 @@ export interface Entry {
   pageTitle: string;
   contentType: string;
   ext: string | null;
+  /** 请求头透传信息；未捕获为 null */
+  headers?: RequestHeaders | null;
   /** 响应 Content-Length；未知为 null */
   size: number | null;
   /** 已观察到的分片请求数（仅 hls/dash/ts 条目有意义） */
@@ -41,6 +50,7 @@ export interface Capture {
   tabId: number;
   contentType: string;
   type: MediaType;
+  headers?: RequestHeaders;
   ext?: string | null;
   size?: number | null;
   pageUrl?: string;
@@ -122,6 +132,18 @@ export function getHeader(headers: readonly HeaderLike[], name: string): string 
   return null;
 }
 
+/** 从 requestHeaders 提取透传所需的 Cookie/Referer/User-Agent */
+export function extractRequestHeaders(headers: readonly HeaderLike[]): RequestHeaders {
+  const out: RequestHeaders = {};
+  const cookie = getHeader(headers, 'cookie');
+  if (cookie !== null) out.cookie = cookie;
+  const referer = getHeader(headers, 'referer');
+  if (referer !== null) out.referer = referer;
+  const ua = getHeader(headers, 'user-agent');
+  if (ua !== null) out.userAgent = ua;
+  return out;
+}
+
 export function createEmptyState(): CaptureState {
   return { nextId: 1, entries: [], segmentKeys: [] };
 }
@@ -140,6 +162,7 @@ export function applyCapture(state: CaptureState, cap: Capture): CaptureResult {
   if (existing !== undefined) {
     existing.lastSeenAt = at;
     if (cap.size != null && existing.size == null) existing.size = cap.size;
+    if (cap.headers !== undefined) existing.headers = { ...existing.headers, ...cap.headers };
     moveToFront(state, existing);
     return { changed: 'updated', entry: existing };
   }
@@ -176,6 +199,7 @@ export function applyCapture(state: CaptureState, cap: Capture): CaptureResult {
     pageTitle: cap.pageTitle ?? '',
     contentType: cap.contentType,
     ext: cap.ext ?? null,
+    headers: cap.headers ?? null,
     size: cap.size ?? null,
     segmentCount: cap.type === 'ts' ? 1 : 0,
     createdAt: at,

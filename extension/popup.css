@@ -21,6 +21,12 @@ button {
   font-size: 12px;
 }
 button:hover { background: #f0f2f5; }
+#send {
+  background: #0969da;
+  border-color: #0969da;
+  color: #fff;
+}
+#send:hover { background: #0550ae; }
 main {
   max-height: 420px;
   overflow-y: auto;

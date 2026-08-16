@@ -13,6 +13,7 @@ const countEl = document.getElementById('count') as HTMLSpanElement;
 const refreshBtn = document.getElementById('refresh') as HTMLButtonElement;
 const copyAllBtn = document.getElementById('copyAll') as HTMLButtonElement;
 const clearBtn = document.getElementById('clear') as HTMLButtonElement;
+const sendBtn = document.getElementById('send') as HTMLButtonElement;
 
 refreshBtn.addEventListener('click', () => {
   void render();
@@ -23,6 +24,9 @@ copyAllBtn.addEventListener('click', () => {
 clearBtn.addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'clear' }).catch(() => undefined);
   void render();
+});
+sendBtn.addEventListener('click', () => {
+  void sendToDesktop();
 });
 
 // 后台新捕获到内容时实时刷新列表
@@ -199,4 +203,59 @@ function formatTime(ts: number): string {
   const d = new Date(ts);
   const p = (x: number): string => String(x).padStart(2, '0');
   return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+
+/** 与 desktop/register-host.mjs 中的宿主名保持一致 */
+const NATIVE_HOST_NAME = 'com.downloader.sniffer';
+
+async function sendToDesktop(): Promise<void> {
+  const entries = await readEntries();
+  if (entries.length === 0) {
+    flashButton(sendBtn, '无记录可发送');
+    return;
+  }
+  let port: chrome.runtime.Port;
+  try {
+    port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+  } catch {
+    flashButton(sendBtn, '宿主未注册');
+    return;
+  }
+  let done = false;
+  const finish = (text: string): void => {
+    if (done) return;
+    done = true;
+    flashButton(sendBtn, text);
+    port.disconnect();
+  };
+  port.onMessage.addListener((msg: unknown) => {
+    if (typeof msg === 'object' && msg !== null) {
+      const t = (msg as { type?: unknown }).type;
+      if (t === 'ack') {
+        finish('已发送 ' + String((msg as { count?: unknown }).count ?? entries.length) + ' 条');
+        return;
+      }
+      if (t === 'error') {
+        finish('宿主返回错误');
+      }
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    if (chrome.runtime.lastError !== undefined) finish('宿主连接失败');
+  });
+  port.postMessage({
+    type: 'capture',
+    entries: entries.map((e) => ({
+      url: e.url,
+      mediaType: e.type,
+      contentType: e.contentType,
+      size: e.size,
+      pageUrl: e.pageUrl,
+      pageTitle: e.pageTitle,
+      cookie: e.headers?.cookie ?? '',
+      referer: e.headers?.referer ?? '',
+      userAgent: e.headers?.userAgent ?? '',
+    })),
+  });
+  setTimeout(() => finish('宿主无响应'), 3000);
 }
