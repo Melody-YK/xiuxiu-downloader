@@ -1,5 +1,7 @@
 # 嗅嗅下载器（IDM 平替）
 
+仓库：https://github.com/Melody-YK/xiuxiu-downloader
+
 浏览器扩展（捕获媒体地址）+ 桌面端（多线程下载 / 流媒体合并）。当前处于 **Phase 1：MVP 嗅探扩展** 阶段。
 
 ## 架构
