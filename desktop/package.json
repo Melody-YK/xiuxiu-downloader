@@ -19,7 +19,7 @@
     "appId": "com.downloader.sniffer",
     "productName": "嗅嗅下载器",
     "files": ["gui/**/*", "lib/**/*", "package.json"],
-    "win": { "target": ["portable"] },
+    "win": { "target": ["portable"], "icon": "build/icon.png" },
     "portable": { "artifactName": "xiuxiu-downloader-${version}-portable.exe" },
     "electronLanguages": ["zh-CN", "en-US"]
   },

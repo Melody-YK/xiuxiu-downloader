@@ -72,6 +72,28 @@ if (!gotLock) {
       },
     });
     void win.loadFile(join(here, 'renderer', 'index.html'));
+    // 关闭窗口：无任务直接退出；有任务先确认（防止误关丢下载）
+    win.on('close', (e) => {
+      if (smoke) return;
+      const running = jobs.getSnapshot().filter((t) => t.status === 'running' || t.status === 'queued').length;
+      if (running === 0) return;
+      e.preventDefault();
+      void dialog
+        .showMessageBox(win, {
+          type: 'warning',
+          buttons: ['退出并中断', '取消'],
+          defaultId: 1,
+          cancelId: 1,
+          title: '下载任务进行中',
+          message: '有 ' + running + ' 个任务正在进行，退出将中断它们。',
+        })
+        .then((r) => {
+          if (r.response === 0) {
+            win.destroy();
+            app.exit(0);
+          }
+        });
+    });
     startIngestServer();
     if (smoke) {
       win.webContents.on('console-message', (_e, _level, message) => {
@@ -123,7 +145,8 @@ if (!gotLock) {
     }
   });
 
-  app.on('window-all-closed', () => app.quit());
+  // 强制退出：确保关闭窗口后进程彻底结束（不留后台进程）
+  app.on('window-all-closed', () => app.exit(0));
 }
 
 function startIngestServer() {
