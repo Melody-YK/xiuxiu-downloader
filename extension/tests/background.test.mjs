@@ -224,6 +224,28 @@ test('background：hook 捕获 B站 playurl 接口（无扩展名）为 dash 条
   assert.equal(found.headers?.cookie, 'SESSDATA=x');
 });
 
+test('background：webRequest 兜底捕获 B站 wbi playurl 接口（带 Cookie）', async () => {
+  fireSendHeaders({
+    requestId: 'req-wbi',
+    tabId: 5,
+    url: 'https://api.bilibili.com/x/player/wbi/playurl?bvid=BV1x&cid=1',
+    requestHeaders: [{ name: 'Cookie', value: 'SESSDATA=y' }],
+  });
+  fireResponse(
+    mediaRes({
+      requestId: 'req-wbi',
+      url: 'https://api.bilibili.com/x/player/wbi/playurl?bvid=BV1x&cid=1',
+      responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+    }),
+  );
+  await sleep(600);
+  const stored = storageData[STORAGE_KEY];
+  const found = (stored?.entries ?? []).find((x) => x.url.includes('wbi'));
+  assert.ok(found, 'wbi playurl 接口应入库');
+  assert.equal(found.type, 'dash');
+  assert.equal(found.headers?.cookie, 'SESSDATA=y');
+});
+
 test('background：popup 清空消息清空状态与存储', async () => {
   let response = null;
   globalThis.chrome.runtime.onMessage._emit({ type: 'clear' }, {}, (v) => {

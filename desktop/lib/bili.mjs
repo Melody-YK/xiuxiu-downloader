@@ -1,8 +1,8 @@
 // B站 playurl 接口支持：解析 JSON（dash 双轨 / flv 单轨）并择优
 // 注意：B站不走 .mpd 清单，播放地址接口返回 JSON，里面才是 m4s/flv 真实地址
 export function isBiliPlayurlUrl(url) {
-  // 按路径识别（不限定域名）：真实 B站接口与本地测试服务器均适用
-  return /\/(x\/player\/playurl|pgc\/player\/web\/playurl)/i.test(url);
+  // 按路径识别（不限定域名）：真实 B站接口与本地测试服务器均适用（含 WBI 签名路径）
+  return /\/(x\/player\/(wbi\/)?playurl|pgc\/player\/web\/playurl)/i.test(url);
 }
 
 function pickBest(list) {

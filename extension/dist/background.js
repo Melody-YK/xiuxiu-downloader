@@ -47,8 +47,8 @@ function schedulePersist() {
     }, 300);
 }
 // ---- 请求头嗅探：onBeforeSendHeaders 只读观察（Cookie/Referer/UA 需 extraHeaders） ----
-/** B站播放地址接口（无媒体扩展名，但必须透传请求头） */
-const BILI_PLAYURL_RE = /bilibili\.com\/(x\/player\/playurl|pgc\/player\/web\/playurl)/i;
+/** B站播放地址接口（无媒体扩展名，但必须透传请求头；含 WBI 签名路径） */
+const BILI_PLAYURL_RE = /bilibili\.com\/(x\/player\/(wbi\/)?playurl|pgc\/player\/web\/playurl)/i;
 const headerCache = new Map();
 /** URL 级请求头（tabId|url），供 hook 层按 URL 补全透传头 */
 const headersByUrl = new Map();
@@ -91,8 +91,10 @@ async function handleResponse(details) {
             return;
         const headers = details.responseHeaders ?? [];
         const contentType = getHeader(headers, 'content-type') ?? '';
+        const isBiliPlayurl = BILI_PLAYURL_RE.test(url);
         const cls = classify(url, contentType);
-        if (!cls.isMedia || cls.type === null)
+        // webRequest 兜底：B站 playurl 接口无媒体扩展名，单独识别（不依赖页面 Hook）
+        if (!isBiliPlayurl && (!cls.isMedia || cls.type === null))
             return;
         const dedupeKey = keyOf(details.tabId, url);
         if (memoryDedupe.has(dedupeKey))
@@ -109,7 +111,7 @@ async function handleResponse(details) {
             url,
             tabId: details.tabId,
             contentType,
-            type: cls.type,
+            type: isBiliPlayurl ? 'dash' : (cls.type ?? 'video'),
             ext: cls.ext,
             headers: reqHeaders,
             size,

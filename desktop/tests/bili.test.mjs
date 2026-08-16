@@ -18,6 +18,7 @@ test.after(async () => {
 
 test('isBiliPlayurlUrl：识别 playurl 接口', () => {
   assert.equal(isBiliPlayurlUrl('https://api.bilibili.com/x/player/playurl?bvid=BV1xx&cid=1&fnval=16'), true);
+  assert.equal(isBiliPlayurlUrl('https://api.bilibili.com/x/player/wbi/playurl?bvid=BV1xx&cid=1&fnval=16&w_rid=abc'), true);
   assert.equal(isBiliPlayurlUrl('https://api.bilibili.com/pgc/player/web/playurl?ep_id=1'), true);
   assert.equal(isBiliPlayurlUrl('https://a.com/x.mpd'), false);
 });
