@@ -88,3 +88,9 @@ footer {
   border-top: 1px solid #e4e7eb;
   background: #fff;
 }
+#debug {
+  margin-top: 4px;
+  font-size: 10px;
+  word-break: break-all;
+  color: #8b949e;
+}

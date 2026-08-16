@@ -1,4 +1,4 @@
-import { bvidFromPageUrl, cleanBiliTitle, NATIVE_HOST_NAME, STORAGE_KEY } from './lib/sniff.js';
+import { bvidFromPageUrl, bvidFromPlayurl, cleanBiliTitle, NATIVE_HOST_NAME, STORAGE_KEY } from './lib/sniff.js';
 const TYPE_LABEL = {
     video: '视频',
     audio: '音频',
@@ -6,6 +6,7 @@ const TYPE_LABEL = {
     dash: 'DASH',
     ts: '分片',
 };
+const debugEl = document.getElementById('debug');
 const listEl = document.getElementById('list');
 const countEl = document.getElementById('count');
 const refreshBtn = document.getElementById('refresh');
@@ -46,7 +47,9 @@ async function enrichBiliTitles(entries) {
         if (title === '')
             return entries;
         return entries.map((e) => {
-            if (e.dedupeKey === 'bili:' + tabBvid && e.pageTitle !== title) {
+            // 匹配：内部逻辑键 或 URL 里的 bvid 参数（双保险）
+            const matches = e.dedupeKey === 'bili:' + tabBvid || bvidFromPlayurl(e.url) === tabBvid;
+            if (matches && e.pageTitle !== title) {
                 void chrome.runtime.sendMessage({ type: 'entry:title', url: e.url, title });
                 return { ...e, pageTitle: title };
             }
@@ -55,6 +58,24 @@ async function enrichBiliTitles(entries) {
     }
     catch {
         return entries;
+    }
+}
+// 诊断信息：帮助在真实站点上定位标题缺失问题
+async function updateDebugInfo() {
+    try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const tab = tabs[0];
+        if (tab === undefined) {
+            debugEl.textContent = '诊断: 无活动标签页';
+            return;
+        }
+        const tabBvid = tab.url !== undefined ? bvidFromPageUrl(tab.url) : '';
+        const title = cleanBiliTitle(tab.title ?? '');
+        debugEl.textContent =
+            '诊断 | 页面: ' + (tab.url ?? '?') + ' | bvid: ' + (tabBvid !== '' ? tabBvid : '(未识别)') + ' | 标题: ' + (title !== '' ? title : '(空/默认)');
+    }
+    catch {
+        debugEl.textContent = '诊断: 读取标签页失败';
     }
 }
 async function readEntries() {
@@ -72,6 +93,7 @@ async function render() {
     entries = await enrichBiliTitles(entries);
     listEl.replaceChildren();
     countEl.textContent = String(entries.length) + ' 条';
+    void updateDebugInfo();
     if (entries.length === 0) {
         listEl.append(buildEmpty());
         return;
@@ -90,7 +112,7 @@ function buildRow(entry) {
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = entry.pageTitle !== '' ? entry.pageTitle : fileNameOf(entry.url);
-    name.title = entry.url;
+    name.title = entry.url + ' | key=' + (entry.dedupeKey ?? '-') + ' | bvid=' + bvidFromPlayurl(entry.url);
     head.append(badge, name);
     const meta = document.createElement('div');
     meta.className = 'meta';

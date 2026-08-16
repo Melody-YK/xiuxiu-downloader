@@ -211,6 +211,7 @@ ipcMain.handle('task:add', (_e, task) => {
   return { ok: true, id };
 });
 ipcMain.handle('task:cancel', (_e, id) => jobs.cancel(id));
+ipcMain.handle('task:remove', (_e, id) => jobs.remove(id));
 ipcMain.handle('util:openFolder', (_e, p) => {
   if (typeof p === 'string' && p !== '') shell.showItemInFolder(p);
 });

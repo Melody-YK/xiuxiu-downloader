@@ -87,6 +87,16 @@ export class JobManager extends EventEmitter {
     return id;
   }
 
+  remove(id) {
+    const t = this.tasks.get(id);
+    if (t === undefined) return false;
+    if (t.status === 'running' && t.abort !== null) t.abort.abort();
+    if (t.status === 'queued') this.queue = this.queue.filter((x) => x !== id);
+    this.tasks.delete(id);
+    this.emit('event', { id, type: 'removed', data: { id } });
+    return true;
+  }
+
   cancel(id) {
     const t = this.tasks.get(id);
     if (t === undefined) return false;

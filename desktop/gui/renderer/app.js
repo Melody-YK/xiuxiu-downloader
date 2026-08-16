@@ -131,7 +131,9 @@ function buildTaskRow() {
   cancelBtn.textContent = '取消';
   const openBtn = document.createElement('button');
   openBtn.textContent = '打开位置';
-  ops.append(cancelBtn, openBtn);
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '删除';
+  ops.append(cancelBtn, openBtn, delBtn);
 
   row.append(head, meta, barWrap, ops);
 
@@ -142,6 +144,7 @@ function buildTaskRow() {
       name.title = t.url;
       cancelBtn.onclick = () => void bridge.cancelTask(t.id);
       openBtn.onclick = () => void bridge.openFolder(t.out);
+      delBtn.onclick = () => void bridge.removeTask(t.id);
     },
     update: (t) => {
       status.textContent = STATUS_LABEL[t.status] ?? t.status;
@@ -171,6 +174,7 @@ function buildTaskRow() {
       meta.title = parts.join(' · ');
       cancelBtn.hidden = !(t.status === 'queued' || t.status === 'running');
       openBtn.hidden = t.status !== 'done';
+      delBtn.hidden = t.status === 'running';
     },
   };
 }
@@ -284,6 +288,15 @@ void (async () => {
   emptyEl.hidden = state.tasks.size > 0;
 
   bridge.onTaskEvent((ev) => {
+    if (ev.type === 'removed') {
+      const row = state.tasks.get(ev.data.id);
+      if (row !== undefined) {
+        row.row.remove();
+        state.tasks.delete(ev.data.id);
+        emptyEl.hidden = state.tasks.size > 0;
+      }
+      return;
+    }
     upsertTask(ev.data);
   });
   bridge.onCapture((entries) => {

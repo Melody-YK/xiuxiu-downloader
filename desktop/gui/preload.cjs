@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   addTask: (task) => ipcRenderer.invoke('task:add', task),
   cancelTask: (id) => ipcRenderer.invoke('task:cancel', id),
+  removeTask: (id) => ipcRenderer.invoke('task:remove', id),
   openFolder: (p) => ipcRenderer.invoke('util:openFolder', p),
   removeCapture: (url) => ipcRenderer.invoke('capture:remove', url),
   chooseSavePath: (opts) => ipcRenderer.invoke('util:chooseSavePath', opts),

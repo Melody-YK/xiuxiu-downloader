@@ -178,6 +178,20 @@ test('错误任务：404 → status=error 且带错误信息', async () => {
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 
+test('remove：删除排队与已完成任务并发出 removed 事件', async () => {
+  const jobs = new JobManager({ maxConcurrent: 1 });
+  const events = [];
+  jobs.on('event', (ev) => events.push(ev));
+  const idA = jobs.add({ url: 'https://a.com/a.mp4', kind: 'file' });
+  const idB = jobs.add({ url: 'https://a.com/b.mp4', kind: 'file' });
+  assert.equal(jobs.remove(idB), true, '删除排队任务');
+  assert.equal(jobs.getSnapshot().length, 1);
+  assert.equal(jobs.remove(idA), true, '删除运行中任务（先取消）');
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(jobs.getSnapshot().length, 0);
+  assert.ok(events.some((e) => e.type === 'removed' && e.data.id === idB));
+});
+
 test('restoreHistory：恢复已完成任务且不重新排队', () => {
   const jobs = new JobManager({ maxConcurrent: 2 });
   jobs.restoreHistory([
