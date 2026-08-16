@@ -6,8 +6,9 @@
   "description": "嗅探下载器桌面端宿主（native messaging）+ 下载核心（Phase 3 起）",
   "scripts": {
     "download": "node cli.mjs",
+    "media": "node media-cli.mjs",
     "register": "node register-host.mjs",
     "unregister": "node register-host.mjs --unregister",
-    "test": "node --test tests/protocol.test.mjs tests/host.test.mjs tests/downloader.test.mjs"
+    "test": "node --test tests/protocol.test.mjs tests/host.test.mjs tests/downloader.test.mjs tests/hls.test.mjs tests/dash.test.mjs tests/segments.test.mjs tests/media-e2e.test.mjs"
   }
 }

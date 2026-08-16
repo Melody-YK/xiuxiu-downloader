@@ -22,7 +22,12 @@ desktop/     桌面端（native messaging 宿主已就绪；下载核心 Phase 3
   register-host.mjs  生成 manifest 并注册 Chrome/Edge 注册表
   lib/downloader.mjs Range 多线程下载核心（动态切分/续传/限速/降级单线程）
   cli.mjs            下载器 CLI：node cli.mjs <url> [选项]
-  tests/             协议 + 宿主 + 下载器测试（本地服务器全链路）
+  lib/hls.mjs        HLS 解析（master 变体/媒体清单/AES-128/EXT-X-MAP/byterange）
+  lib/dash.mjs       DASH 最小解析（SegmentTemplate + SegmentTimeline）
+  lib/segments.mjs   分片下载（并发 + AES-128 解密 + fMP4 初始化段前置）
+  lib/merge.mjs      分片合并 + ffmpeg 转封装
+  media-cli.mjs      流媒体 CLI：node media-cli.mjs <m3u8|mpd> [-o out.mp4]
+  tests/             协议 + 宿主 + 下载器 + 流媒体测试（本地服务器全链路）
 
 ## 环境
 
@@ -34,7 +39,7 @@ Node v22.19.0 / npm 10.9.3 / git 2.49.0；ffmpeg 已安装（Phase 4 使用）�
 - [x] **Phase 1：MVP 嗅探扩展**（已完成，待验收）
 - [x] **Phase 2：native messaging 桥**（已完成，待验收）
 - [x] **Phase 3：多线程下载核心**（已完成，待验收）
-- [ ] Phase 4：流媒体（m3u8/mpd → 分片 → AES-128 解密 → ffmpeg 合并）
+- [x] **Phase 4：流媒体**（m3u8/mpd → 分片 → AES-128 解密 → ffmpeg 合并 mp4，已完成待验收）
 - [ ] Phase 5：GUI 与打磨（可选）
 
 ## Phase 1 验证步骤（Edge）
@@ -79,6 +84,19 @@ node cli.mjs <url> --cookie "..." --referer "..." -u "UA"
 2. 断点续传：中断后再次运行从断点恢复，最终文件与完整下载 SHA256 一致（公开文件实测通过）
 3. 服务器不支持/忽略 Range 时自动降级单线程并正常完成；连接中途断开自动重试
 
+## Phase 4 使用与验证（流媒体）
+
+cd desktop
+
+node media-cli.mjs https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8 -o x36xhzz.mp4
+node media-cli.mjs https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8 -o bipbop.mp4
+node media-cli.mjs <清单地址> --list      # 列出 master 全部清晰度
+node media-cli.mjs <清单地址> --variant 1 # 选第 2 档清晰度
+node media-cli.mjs <清单地址> --cookie "..." --referer "..."   # 透传请求头
+
+能力：HLS(m3u8，含 AES-128 解密/字节范围/fMP4 初始化段) 与 DASH(mpd，SegmentTemplate)；DRM 明确不支持。
+已实测：mux.dev TS 流、Apple AES-128 加密流、Apple fMP4 流，输出均可用 ffprobe 验证为 h264 mp4。
+
 ## 开发
 
 cd extension
@@ -89,6 +107,7 @@ npm test           # 单元 + 冒烟测试（pretest 会自动先 build）
 
 # 桌面端（desktop/，无第三方依赖）
 npm run download -- <url> [-o 文件] [-n 线程] [-l KB/s] [--cookie C] [--referer R] [-u UA]
+npm run media -- <m3u8|mpd 地址> [-o out.mp4] [-n 线程] [--variant N] [--list]
 npm run register    # 注册 native messaging 宿主（Chrome/Edge 注册表）
 npm run unregister  # 注销
 npm test            # 协议 + 宿主 + 下载器测试
