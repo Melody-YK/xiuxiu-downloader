@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('api', {
   getSnapshot: () => ipcRenderer.invoke('app:getSnapshot'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
+  diagCheck: () => ipcRenderer.invoke('diag:check'),
+  openExternal: (url) => ipcRenderer.invoke('util:openExternal', url),
+  openPath: (p) => ipcRenderer.invoke('util:openPath', p),
   onTaskEvent: (cb) => ipcRenderer.on('task:event', (_e, ev) => cb(ev)),
   onCapture: (cb) => ipcRenderer.on('capture:new', (_e, entries) => cb(entries)),
 });

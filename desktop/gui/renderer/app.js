@@ -66,6 +66,8 @@ const sThreadsEl = document.getElementById('s-threads');
 const fThreadsEl = document.getElementById('f-threads');
 const customFields = document.getElementById('custom-fields');
 const sTrayEl = document.getElementById('s-tray');
+const sLaunchEl = document.getElementById('s-launch');
+const sNotifyEl = document.getElementById('s-notify');
 const PRESETS = {
   balanced: { maxConcurrent: 2, defaultThreads: 8 },
   aggressive: { maxConcurrent: 4, defaultThreads: 16 },
@@ -99,6 +101,63 @@ sThreadsEl.addEventListener('change', () => {
 });
 sTrayEl.addEventListener('change', () => {
   void bridge.setSettings({ closeToTray: sTrayEl.checked });
+});
+sLaunchEl.addEventListener('change', () => {
+  void bridge.setSettings({ launchAtLogin: sLaunchEl.checked });
+});
+sNotifyEl.addEventListener('change', () => {
+  void bridge.setSettings({ notifyDone: sNotifyEl.checked });
+});
+
+// ---- 首次使用指引 ----
+const guideModal = document.getElementById('guide-modal');
+const guideDiag = document.getElementById('guide-diag');
+const guideOpenExt = document.getElementById('guide-open-ext');
+const guideOpenEdge = document.getElementById('guide-open-edge');
+const guideClose = document.getElementById('guide-close');
+const helpBtn = document.getElementById('help-btn');
+let diagCache = null;
+
+async function showGuide() {
+  guideModal.hidden = false;
+  if (diagCache === null) {
+    guideDiag.innerHTML = '正在检查环境…';
+    try {
+      diagCache = await bridge.diagCheck();
+    } catch {
+      diagCache = { version: '?', chromeRegistered: false, edgeRegistered: false, manifestOk: false, manifestPath: null, extensionFolder: null };
+    }
+  }
+  const d = diagCache;
+  const item = (label, ok, extra) =>
+    '<div>' + (ok ? '<span class="ok">✓</span> ' : '<span class="bad">✗</span> ') + label + (extra ? ' <span style="color:#8b949e">' + extra + '</span>' : '') + '</div>';
+  guideDiag.innerHTML =
+    item('桌面端运行中（版本 v' + d.version + '）', true) +
+    item('宿主注册 Chrome', d.chromeRegistered) +
+    item('宿主注册 Edge', d.edgeRegistered) +
+    item('宿主清单有效', d.manifestOk) +
+    '<div style="margin-top:6px;color:#57606a">' +
+    ((d.chromeRegistered || d.edgeRegistered) && d.manifestOk
+      ? '环境就绪：浏览器扩展里点「发送到桌面端」即可。'
+      : '检查未通过时，把上方 ✗ 项告诉我（或截图），我来修。') +
+    '</div>';
+  guideOpenExt.hidden = d.extensionFolder === null;
+}
+
+guideClose.addEventListener('click', () => {
+  guideModal.hidden = true;
+  void bridge.setSettings({ seenGuide: true });
+});
+helpBtn.addEventListener('click', () => {
+  void showGuide();
+});
+guideOpenExt.addEventListener('click', () => {
+  if (diagCache?.extensionFolder !== null && diagCache?.extensionFolder !== undefined) {
+    void bridge.openPath(diagCache.extensionFolder);
+  }
+});
+guideOpenEdge.addEventListener('click', () => {
+  void bridge.openExternal('edge://extensions');
 });
 
 // ---- 添加任务 ----
@@ -411,6 +470,9 @@ void (async () => {
     for (const el of document.querySelectorAll('input[name="mode"]')) el.checked = el.value === mode;
     customFields.hidden = mode !== 'custom';
     sTrayEl.checked = s.closeToTray !== false;
+    sLaunchEl.checked = s.launchAtLogin === true;
+    sNotifyEl.checked = s.notifyDone !== false;
+    if (s.seenGuide !== true) void showGuide();
   } catch {
     // 忽略设置读取失败
   }

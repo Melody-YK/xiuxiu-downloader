@@ -12,6 +12,7 @@
     <nav>
       <button id="tab-dl" class="tab active" type="button">下载</button>
       <button id="tab-cap" class="tab" type="button">扩展捕获 <span id="cap-count">0</span></button>
+      <button id="help-btn" class="tab ghost" type="button" title="使用帮助">帮助</button>
     </nav>
   </header>
 
@@ -25,6 +26,8 @@
       <label class="radio"><input type="radio" name="mode" value="conservative"> <b>保守</b><span class="desc">同时 1 个任务、每任务 4 线程——网络不稳或服务器脆弱时更稳妥</span></label>
       <label class="radio"><input type="radio" name="mode" value="custom"> <b>自定义</b><span class="desc">自己指定数值</span></label>
       <div class="hdr-row"><label for="s-tray">关闭窗口时</label><label class="ck"><input type="checkbox" id="s-tray" checked> 最小化到托盘继续下载<span class="desc">右键托盘图标可退出</span></label></div>
+      <div class="hdr-row"><label for="s-launch">开机启动</label><label class="ck"><input type="checkbox" id="s-launch"> 登录 Windows 时自动启动并缩到托盘<span class="desc">随时待命接收浏览器发来的任务</span></label></div>
+      <div class="hdr-row"><label for="s-notify">完成通知</label><label class="ck"><input type="checkbox" id="s-notify" checked> 下载完成/失败时弹系统通知<span class="desc">点通知可打开文件所在文件夹</span></label></div>
       <div id="custom-fields" hidden>
         <div class="hdr-row"><label>同时任务数 (1-8)</label><input id="s-max" type="number" min="1" max="8"><span class="desc">同时下载几个任务</span></div>
         <div class="hdr-row"><label>默认线程数 (1-32)</label><input id="s-threads" type="number" min="1" max="32"><span class="desc">每个任务用几个连接；不是越大越好，8-16 通常已足够，超过带宽上限还可能被服务器限速</span></div>
@@ -69,6 +72,25 @@
     </p>
     <div id="captures"></div>
   </main>
+
+  <div id="guide-modal" class="guide-mask" hidden>
+    <div class="guide-card">
+      <h2>👋 欢迎使用嗅嗅下载器</h2>
+      <p class="guide-sub">第一次使用？按下面 4 步走一遍，两分钟上手。</p>
+      <ol class="guide-steps">
+        <li><b>安装浏览器扩展</b>：在 Edge / Chrome 地址栏输入 <code>edge://extensions</code> 或 <code>chrome://extensions</code> → 打开右上角「开发人员模式」→ 点「加载解压缩的扩展」→ 选择扩展文件夹（下方按钮可直接打开）。</li>
+        <li><b>抓取链接</b>：打开含视频 / 文件的网页，点浏览器工具栏的「嗅嗅」图标 → 点「发送到桌面端」；或在视频画面上直接点「下载」按钮。</li>
+        <li><b>自动下载</b>：任务出现在本窗口，多线程自动开跑；完成时右下角有系统通知，点通知直达文件。</li>
+        <li><b>后台常驻</b>：关闭窗口只是缩到托盘、下载继续；右键托盘图标可退出。想让电脑一开机就待命，到「设置」里勾选开机启动。</li>
+      </ol>
+      <div id="guide-diag" class="guide-diag">正在检查环境…</div>
+      <div class="guide-actions">
+        <button type="button" id="guide-open-ext">打开扩展文件夹</button>
+        <button type="button" id="guide-open-edge">打开 Edge 扩展页</button>
+        <button type="button" id="guide-close" class="primary">开始使用</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>

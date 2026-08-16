@@ -1,15 +1,18 @@
 // Electron 主进程：窗口 + IPC + 扩展捕获接收（host.mjs 通过 http://127.0.0.1:17321/ingest 推送）
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, shell, Tray } from 'electron';
+import { execFile } from 'node:child_process';
 import { createServer, request } from 'node:http';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JobManager, deleteTaskFiles, isMediaUrl, sanitizeFileName } from '../lib/queue.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const smoke = process.argv.includes('--smoke');
+const startHidden = process.argv.includes('--hidden'); // 开机自启动：静默进托盘
+app.setAppUserModelId('com.xiuxiu.downloader'); // Windows 通知需要
 const INGEST_PORT = smoke ? 17322 : 17321; // 冒烟自检用独立端口，避免与正在运行的真实 GUI 冲突
 if (smoke) {
   // 冒烟模式使用独立 userData：不与真实实例抢单实例锁，也不污染下载历史
@@ -22,7 +25,7 @@ const PRESETS = {
   aggressive: { maxConcurrent: 4, defaultThreads: 16 },
   conservative: { maxConcurrent: 1, defaultThreads: 4 },
 };
-const settings = { mode: 'balanced', maxConcurrent: 2, defaultThreads: 8, closeToTray: true };
+const settings = { mode: 'balanced', maxConcurrent: 2, defaultThreads: 8, closeToTray: true, launchAtLogin: false, notifyDone: true, seenGuide: false };
 let win = null;
 let tray = null;
 let trayNotified = false;
@@ -51,8 +54,12 @@ if (!gotLock) {
         const raw = JSON.parse(await readFile(settingsPath, 'utf8'));
         settings.mode = PRESETS[raw?.mode] !== undefined || raw?.mode === 'custom' ? raw.mode : 'balanced';
         if (typeof raw?.closeToTray === 'boolean') settings.closeToTray = raw.closeToTray;
+        if (typeof raw?.launchAtLogin === 'boolean') settings.launchAtLogin = raw.launchAtLogin;
+        if (typeof raw?.notifyDone === 'boolean') settings.notifyDone = raw.notifyDone;
+        if (typeof raw?.seenGuide === 'boolean') settings.seenGuide = raw.seenGuide;
         if (typeof raw?.maxConcurrent === 'number') settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(raw.maxConcurrent)));
         if (typeof raw?.defaultThreads === 'number') settings.defaultThreads = Math.max(1, Math.min(32, Math.round(raw.defaultThreads)));
+        applyLaunchAtLogin();
       } catch {
         // 无设置文件则用默认值
       }
@@ -67,7 +74,7 @@ if (!gotLock) {
     win = new BrowserWindow({
       width: 980,
       height: 660,
-      show: !smoke,
+      show: !smoke && !startHidden,
       title: '嗅嗅下载器',
       autoHideMenuBar: true,
       webPreferences: {
@@ -139,7 +146,7 @@ if (!gotLock) {
             res.on('end', () => {
               setTimeout(() => {
                 void win.webContents
-                  .executeJavaScript('typeof window.api + "|" + document.getElementById("cap-count").textContent + "|" + document.getElementById("tasks").childElementCount')
+                  .executeJavaScript('typeof window.api + "|" + document.getElementById("cap-count").textContent + "|" + document.getElementById("tasks").childElementCount + "|" + (document.getElementById("guide-modal") !== null ? 1 : 0) + "|" + (document.getElementById("s-launch") !== null ? 1 : 0)')
                   .then((txt) => {
                     console.log('[smoke] 捕获条目数=' + captures.length + ' 任务数=' + jobs.getSnapshot().length + ' 渲染层[api|cap-count|task行数]=' + txt);
                     app.exit(captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') ? 0 : 1);
@@ -402,6 +409,63 @@ function pruneCaptures() {
   const now = Date.now();
   while (captures.length > 0 && now - (captures[captures.length - 1].at ?? 0) > CAPTURE_TTL) captures.pop();
 }
+ipcMain.handle('diag:check', async () => {
+  const KEY_CHROME = 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.downloader.sniffer';
+  const KEY_EDGE = 'HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\com.downloader.sniffer';
+  const chrome = await regDefaultValue(KEY_CHROME);
+  const edge = await regDefaultValue(KEY_EDGE);
+  const manifestPath = chrome ?? edge ?? null;
+  let manifestOk = false;
+  if (manifestPath !== null) {
+    try {
+      const raw = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      manifestOk = raw?.name === 'com.downloader.sniffer' && typeof raw?.path === 'string' && existsSync(raw.path);
+    } catch {
+      manifestOk = false;
+    }
+  }
+  return {
+    version: app.getVersion(),
+    chromeRegistered: chrome !== null,
+    edgeRegistered: edge !== null,
+    manifestPath,
+    manifestOk,
+    extensionFolder: app.isPackaged ? null : join(here, '..', '..', 'extension'),
+  };
+});
+
+function regDefaultValue(key) {
+  return new Promise((resolve) => {
+    execFile('reg', ['query', key, '/ve'], { windowsHide: true, timeout: 8000 }, (err, stdout) => {
+      if (err !== null) {
+        resolve(null);
+        return;
+      }
+      const m = /REG_SZ\s+(\S.*)/.exec(stdout);
+      resolve(m !== null ? (m[1] ?? '').trim() : null);
+    });
+  });
+}
+
+ipcMain.handle('util:openExternal', async (_e, url) => {
+  if (typeof url !== 'string' || !/^(https?:|edge:|chrome:|msedge:)/i.test(url)) return false;
+  try {
+    await shell.openExternal(url);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('util:openPath', async (_e, p) => {
+  if (typeof p !== 'string' || p === '') return false;
+  try {
+    return (await shell.openPath(p)) === '';
+  } catch {
+    return false;
+  }
+});
+
 ipcMain.handle('util:chooseSavePath', async (_e, opts) => {
   const def = typeof opts?.defaultName === 'string' && opts.defaultName !== '' ? opts.defaultName : 'download';
   const r = await dialog.showSaveDialog(win, {
@@ -415,13 +479,19 @@ ipcMain.handle('app:getSnapshot', () => ({ tasks: jobs.getSnapshot(), captures }
 ipcMain.handle('settings:get', () => ({ ...settings }));
 ipcMain.handle('settings:set', async (_e, opts) => {
   if (typeof opts?.closeToTray === 'boolean') settings.closeToTray = opts.closeToTray;
+  if (typeof opts?.launchAtLogin === 'boolean') {
+    settings.launchAtLogin = opts.launchAtLogin;
+    applyLaunchAtLogin();
+  }
+  if (typeof opts?.notifyDone === 'boolean') settings.notifyDone = opts.notifyDone;
+  if (typeof opts?.seenGuide === 'boolean') settings.seenGuide = opts.seenGuide;
   if (typeof opts?.mode === 'string' && PRESETS[opts.mode] !== undefined) {
     const v = PRESETS[opts.mode];
     settings.mode = opts.mode;
     settings.maxConcurrent = v.maxConcurrent;
     settings.defaultThreads = v.defaultThreads;
     jobs.setMaxConcurrent(v.maxConcurrent);
-  } else {
+  } else if (typeof opts?.maxConcurrent === 'number' || typeof opts?.defaultThreads === 'number') {
     settings.mode = 'custom';
     if (typeof opts?.maxConcurrent === 'number') {
       settings.maxConcurrent = Math.max(1, Math.min(8, Math.round(opts.maxConcurrent)));
@@ -435,10 +505,48 @@ ipcMain.handle('settings:set', async (_e, opts) => {
   return { ...settings };
 });
 
+// 开机自启动（Windows 登录项）。开发模式不写注册表，避免把 electron.exe 写进去
+function applyLaunchAtLogin() {
+  if (!app.isPackaged || smoke) return;
+  try {
+    app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin, path: process.execPath, args: ['--hidden'] });
+  } catch {
+    // 设置失败忽略（如某些受限环境）
+  }
+}
+
 jobs.on('event', (ev) => {
   if (win !== null && !win.isDestroyed()) win.webContents.send('task:event', ev);
   if (!smoke) scheduleSaveHistory();
+  if (settings.notifyDone && ev.type === 'status' && (ev.data?.status === 'done' || ev.data?.status === 'error')) {
+    notifyTaskDone(ev.data);
+  }
 });
+
+// 下载完成/失败系统通知：点击打开文件位置
+function notifyTaskDone(t) {
+  if (t === undefined || t === null || smoke) return;
+  const ok = t.status === 'done';
+  const name = typeof t.out === 'string' ? basename(t.out) : (t.url ?? '未知任务');
+  try {
+    const n = new Notification({
+      title: ok ? '✅ 下载完成' : '❌ 下载失败',
+      body: name + (ok ? '' : '（' + String(t.error ?? '未知错误') + '）'),
+      icon: join(here, '..', 'build', 'icon.png'),
+      silent: !ok,
+    });
+    n.on('click', () => {
+      if (win !== null && !win.isDestroyed()) {
+        win.show();
+        win.focus();
+      }
+      if (ok && typeof t.out === 'string') shell.showItemInFolder(t.out);
+    });
+    n.show();
+  } catch {
+    // 通知失败不影响下载
+  }
+}
 
 // 历史持久化：仅保存终态任务（done/error/canceled），最多 200 条
 function scheduleSaveHistory() {
