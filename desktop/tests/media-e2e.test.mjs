@@ -35,6 +35,8 @@ test('HLS 全链路：ffmpeg 生成 TS 分片 → 解析 → 下载 → 合并 �
     await writeFile(join(dir, 'index.m3u8'), playlist);
 
     const server = createServer((req, res) => {
+      res.on('error', () => {});
+      req.on('error', () => {});
       const path = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\//, '');
       readFile(join(dir, path))
         .then((buf) => {

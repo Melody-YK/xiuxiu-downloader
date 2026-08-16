@@ -1,12 +1,9 @@
 #!/usr/bin/env node
 // 流媒体下载 CLI：node media-cli.mjs <m3u8|mpd url> [-o out.mp4] [-n 线程] [--variant N] [--list] [--cookie C] [--referer R] [-u UA] [--keep]
-import { basename, dirname, join, resolve } from 'node:path';
-import { rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { parseMasterPlaylist, parseMediaPlaylist } from './lib/hls.mjs';
-import { parseMpd, probeSegmentCount } from './lib/dash.mjs';
-import { downloadSegments } from './lib/segments.mjs';
-import { concatFiles, ffmpegRemux } from './lib/merge.mjs';
+import { parseMasterPlaylist } from './lib/hls.mjs';
+import { downloadMedia } from './lib/pipeline.mjs';
 
 const { values, positionals } = parseArgs({
   options: {
@@ -69,88 +66,38 @@ process.on('SIGINT', () => {
 });
 
 try {
-  const res = await fetch(url, { headers, redirect: 'follow', signal: ac.signal });
-  if (!res.ok) throw new Error('清单请求失败: HTTP ' + res.status);
-  const text = await res.text();
-  const finalUrl = res.url || url;
-
-  let tasks;
-  let kind; // 'ts' | 'fmp4' | 'dash'
-  if (/<(MPD|mpd)\b/i.test(text)) {
-    const mpd = parseMpd(text, finalUrl);
-    let count = mpd.count;
-    if (count === 0) {
-      console.log('清单无 SegmentTimeline，探测分片数量...');
-      count = await probeSegmentCount(mpd.buildSegmentUrl, mpd.startNumber, headers);
+  if (values.list) {
+    const res = await fetch(url, { headers, redirect: 'follow', signal: ac.signal });
+    if (!res.ok) throw new Error('清单请求失败: HTTP ' + res.status);
+    const text = await res.text();
+    const variants = parseMasterPlaylist(text, res.url || url);
+    if (variants.length === 0) {
+      console.log('该清单没有多清晰度变体（本身就是媒体清单）。');
+      process.exit(0);
     }
-    if (count === 0) throw new Error('未找到 DASH 分片');
-    console.log('DASH: ' + mpd.representation.mime + ' ' + (mpd.representation.bandwidth / 1000).toFixed(0) + 'kbps, ' + count + ' 个分片');
-    tasks = [];
-    for (let i = 0; i < count; i += 1) tasks.push({ url: mpd.buildSegmentUrl(mpd.startNumber + i) });
-    kind = 'dash';
-  } else {
-    const variants = parseMasterPlaylist(text, finalUrl);
-    let mediaText = text;
-    let mediaUrl = finalUrl;
-    if (variants.length > 0) {
-      if (values.list) {
-        console.log('可用清晰度（--variant 选择，默认 0 = 最高）：');
-        variants.forEach((v, i) => {
-          console.log('  [' + i + '] ' + (v.resolution ?? '?') + ' ' + (v.bandwidth / 1000).toFixed(0) + 'kbps ' + (v.codecs ?? ''));
-        });
-        process.exit(0);
-      }
-      const v = variants[Math.min(variantIdx, variants.length - 1)];
-      console.log('选择清晰度: ' + (v.resolution ?? '?') + ' ' + (v.bandwidth / 1000).toFixed(0) + 'kbps ' + (v.codecs ?? ''));
-      const r2 = await fetch(v.url, { headers, redirect: 'follow', signal: ac.signal });
-      if (!r2.ok) throw new Error('media playlist 请求失败: HTTP ' + r2.status);
-      mediaText = await r2.text();
-      mediaUrl = r2.url || v.url;
-    }
-    const mp = parseMediaPlaylist(mediaText, mediaUrl);
-    if (mp.segments.length === 0) throw new Error('未解析到分片');
-    console.log(
-      'HLS: ' + mp.segments.length + ' 个分片' +
-      (mp.isVod ? ' (VOD)' : ' (直播/无 ENDLIST，仅下载当前清单)') +
-      (mp.hasFmp4 ? ' [fMP4]' : ' [TS]'),
-    );
-    tasks = mp.segments.map((s, i) => ({
-      url: s.url,
-      byterange: s.byterange,
-      key: s.key,
-      ivSeq: mp.mediaSequence + i,
-      map: s.map,
-    }));
-    kind = mp.hasFmp4 ? 'fmp4' : 'ts';
+    console.log('可用清晰度（--variant 选择，默认 0 = 最高）：');
+    variants.forEach((v, i) => {
+      console.log('  [' + i + '] ' + (v.resolution ?? '?') + ' ' + (v.bandwidth / 1000).toFixed(0) + 'kbps ' + (v.codecs ?? ''));
+    });
+    process.exit(0);
   }
 
-  for (const t of tasks) {
-    if (t.key !== null && t.key !== undefined && t.key.method !== 'AES-128') {
-      throw new Error('暂不支持的加密方式: ' + t.key.method + '（DRM 明确不支持）');
-    }
-  }
-
-  const workDir = join(dirname(out), basename(out) + '.parts');
-  await rm(workDir, { recursive: true, force: true });
-  console.log('下载分片... (' + connections + ' 并发)');
   const t0 = Date.now();
-  const files = await downloadSegments(tasks, {
+  const result = await downloadMedia({
+    url,
+    out,
     headers,
     connections,
-    workDir,
+    variantIdx,
+    keep: values.keep ?? false,
     signal: ac.signal,
+    onPhase: (s) => console.log(s),
     onProgress: (p) => {
       process.stdout.write('\r  分片 ' + p.done + '/' + p.total);
     },
   });
   process.stdout.write('\n');
-  const mergedExt = kind === 'ts' ? '.ts' : '.mp4';
-  console.log('合并分片...');
-  const merged = await concatFiles(files, join(workDir, 'merged' + mergedExt));
-  console.log('ffmpeg 转封装 mp4...');
-  await ffmpegRemux(merged, out);
-  if (!values.keep) await rm(workDir, { recursive: true, force: true });
-  console.log('完成: ' + out + '  用时 ' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
+  console.log('完成: ' + result.out + '  用时 ' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
 } catch (err) {
   process.stdout.write('\n');
   console.error('失败: ' + (err?.message ?? String(err)));

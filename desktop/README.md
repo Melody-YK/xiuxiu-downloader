@@ -1,6 +1,6 @@
 # desktop
 
-桌面端宿主程序（Phase 2 native messaging 桥 + Phase 3 多线程下载核心 + Phase 4 流媒体已完成）。
+桌面端宿主程序（native messaging 桥 + 多线程下载核心 + 流媒体 + Electron GUI，Phase 1-5 已完成）。
 
 ## 文件
 
@@ -14,6 +14,9 @@ lib/dash.mjs         DASH 最小解析（SegmentTemplate + SegmentTimeline）
 lib/segments.mjs     分片下载（并发 + AES-128 解密 + fMP4 初始化段前置）
 lib/merge.mjs        分片合并 + ffmpeg 转封装
 media-cli.mjs        流媒体 CLI：node media-cli.mjs <m3u8|mpd 地址> [-o out.mp4] [--variant N] [--list]
+lib/pipeline.mjs      流媒体管线（CLI 与 GUI 共用）
+lib/queue.mjs         下载任务队列（并发限制/取消/进度事件）
+gui/                  Electron GUI：npm run gui 启动（扩展捕获经 host.mjs → 127.0.0.1:17321 推送）
 register-host.mjs    生成 native-host-manifest.json 并写入注册表（Chrome/Edge 两条路径）：
                      HKCU\Software\Google\Chrome\NativeMessagingHosts\com.downloader.sniffer
                      HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.downloader.sniffer
@@ -25,6 +28,7 @@ node cli.mjs https://proof.ovh.net/files/100Mb.dat -o 100MB.bin -n 8   # 多线�
 node cli.mjs <url> -l 4096 --cookie "..." --referer "..." -u "UA"        # 限速 + 透传请求头
 node media-cli.mjs https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8 -o out.mp4   # HLS → mp4
 node media-cli.mjs <m3u8|mpd 地址> --list                               # 列出清晰度
+npm run gui                                                             # 图形界面（扩展捕获一键下载）
 # 中断（Ctrl+C / 关窗口）后再次运行相同命令自动续传（<out>.meta.json 记录每段进度）
 
 npm run register      # 注册（生成 manifest，写入注册表）

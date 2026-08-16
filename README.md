@@ -27,7 +27,10 @@ desktop/     桌面端（native messaging 宿主已就绪；下载核心 Phase 3
   lib/segments.mjs   分片下载（并发 + AES-128 解密 + fMP4 初始化段前置）
   lib/merge.mjs      分片合并 + ffmpeg 转封装
   media-cli.mjs      流媒体 CLI：node media-cli.mjs <m3u8|mpd> [-o out.mp4]
-  tests/             协议 + 宿主 + 下载器 + 流媒体测试（本地服务器全链路）
+  lib/pipeline.mjs   流媒体管线（CLI 与 GUI 共用）
+  lib/queue.mjs      下载任务队列（并发限制/取消/进度事件）
+  gui/               Electron GUI（主进程/预加载/渲染层，npm run gui）
+  tests/             协议 + 宿主 + 下载器 + 流媒体 + 队列测试（35 个，全部通过）
 
 ## 环境
 
@@ -40,7 +43,7 @@ Node v22.19.0 / npm 10.9.3 / git 2.49.0；ffmpeg 已安装（Phase 4 使用）�
 - [x] **Phase 2：native messaging 桥**（已完成，待验收）
 - [x] **Phase 3：多线程下载核心**（已完成，待验收）
 - [x] **Phase 4：流媒体**（m3u8/mpd → 分片 → AES-128 解密 → ffmpeg 合并 mp4，已完成待验收）
-- [ ] Phase 5：GUI 与打磨（可选）
+- [x] **Phase 5：GUI（Electron）**（已完成，待验收）
 
 ## Phase 1 验证步骤（Edge）
 
@@ -97,6 +100,17 @@ node media-cli.mjs <清单地址> --cookie "..." --referer "..."   # 透传请�
 能力：HLS(m3u8，含 AES-128 解密/字节范围/fMP4 初始化段) 与 DASH(mpd，SegmentTemplate)；DRM 明确不支持。
 已实测：mux.dev TS 流、Apple AES-128 加密流、Apple fMP4 流，输出均可用 ffprobe 验证为 h264 mp4。
 
+## Phase 5 使用（Electron GUI）
+
+cd desktop
+npm install       # 首次需要（安装 electron）
+npm run gui       # 启动图形界面
+
+功能：粘贴/拖入 URL 下载（自动识别直链与 m3u8/mpd）、任务队列与进度/速度显示、取消、打开文件位置、限速与线程数设置；
+「扩展捕获」标签实时接收扩展推送（保持 GUI 运行，popup 点「发送到桌面端」），一键下载自动带上 Cookie/Referer/UA。
+
+自检：npm run gui -- --smoke（无窗口，验证 渲染层加载 + 模拟捕获推送端到端）
+
 ## 开发
 
 cd extension
@@ -108,6 +122,7 @@ npm test           # 单元 + 冒烟测试（pretest 会自动先 build）
 # 桌面端（desktop/，无第三方依赖）
 npm run download -- <url> [-o 文件] [-n 线程] [-l KB/s] [--cookie C] [--referer R] [-u UA]
 npm run media -- <m3u8|mpd 地址> [-o out.mp4] [-n 线程] [--variant N] [--list]
+npm run gui                # Electron 图形界面（-- --smoke 为无窗口自检）
 npm run register    # 注册 native messaging 宿主（Chrome/Edge 注册表）
 npm run unregister  # 注销
 npm test            # 协议 + 宿主 + 下载器测试

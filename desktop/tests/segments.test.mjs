@@ -18,6 +18,8 @@ test.after(async () => {
 
 function startStaticServer(files) {
   const server = createServer((req, res) => {
+    res.on('error', () => {});
+    req.on('error', () => {});
     const path = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\//, '');
     const buf = files[path];
     if (buf === undefined) {

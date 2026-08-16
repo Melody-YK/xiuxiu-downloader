@@ -73,6 +73,9 @@ function startServer(opts) {
   const server = createServer((req, res) => {
     active += 1;
     maxActive = Math.max(maxActive, active);
+    // 客户端主动中断（取消任务/降级重下）时避免未捕获的 EPIPE/ECONNRESET
+    res.on('error', () => {});
+    req.on('error', () => {});
     res.on('close', () => {
       active -= 1;
     });
