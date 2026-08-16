@@ -14,7 +14,7 @@
 extension/   MV3 扩展（Chrome/Edge 通用）
   manifest.json / popup.html / popup.css
   src/        TypeScript 源码（background 捕获 + popup UI + lib 纯逻辑）
-  tests/      纯逻辑单元测试（node --test）
+  tests/      单元测试 + background 冒烟测试（node --test，mock chrome API）
   dist/       tsc 构建产物（已提交，可直接加载）
 desktop/     桌面端（Phase 2 起实现：native messaging 宿主 + 下载核心）
 
