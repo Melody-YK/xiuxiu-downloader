@@ -2,7 +2,7 @@
 // 同时被 background service worker（经 tsc 编译）与 Node 单元测试引用，
 // 因此这里不得依赖 chrome.* 或任何浏览器专属 API。
 
-export type MediaType = 'video' | 'audio' | 'hls' | 'dash' | 'ts' | 'stream';
+export type MediaType = 'video' | 'audio' | 'hls' | 'dash' | 'ts' | 'stream' | 'file';
 
 export interface Classification {
   isMedia: boolean;
@@ -91,7 +91,8 @@ const VIDEO_EXTS = new Set(['mp4', 'webm', 'flv', 'm4v', 'mov', 'avi', 'mkv', 'f
 const AUDIO_EXTS = new Set(['m4a', 'mp3', 'aac', 'ogg', 'oga', 'wav', 'opus', 'flac']);
 /** 流媒体分片扩展名 */
 const SEGMENT_EXTS = new Set(['ts', 'm4s']);
-const ALL_EXTS = new Set([...VIDEO_EXTS, ...AUDIO_EXTS, ...SEGMENT_EXTS, 'm3u8', 'mpd']);
+const FILE_EXTS = new Set(['exe', 'msi', 'zip', 'rar', '7z', 'iso', 'dmg', 'apk', 'deb', 'rpm', 'cab', 'tar', 'gz', 'bz2', 'xz', 'pdf', 'epub', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']);
+const ALL_EXTS = new Set([...VIDEO_EXTS, ...AUDIO_EXTS, ...SEGMENT_EXTS, ...FILE_EXTS, 'm3u8', 'mpd']);
 
 /** 从 URL 路径提取媒体扩展名（只看 pathname，避免查询参数误判） */
 export function extOf(url: string): string | null {
@@ -125,6 +126,10 @@ export function classify(url: string, contentType: string): Classification {
   }
   if (ct.startsWith('audio/') || (ext !== null && AUDIO_EXTS.has(ext))) {
     return { isMedia: true, type: 'audio', ext };
+  }
+  if (ext !== null && FILE_EXTS.has(ext)) return { isMedia: false, type: 'file', ext };
+  if (ct.includes('octet-stream') || ct.includes('application/x-msdownload') || ct.includes('application/x-7z-compressed') || ct.includes('application/zip') || ct.includes('application/x-rar-compressed')) {
+    return { isMedia: false, type: 'file', ext };
   }
   return { isMedia: false, type: null, ext };
 }

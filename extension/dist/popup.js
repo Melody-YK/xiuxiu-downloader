@@ -6,6 +6,7 @@ const TYPE_LABEL = {
     dash: 'DASH',
     ts: '分片',
     stream: '分片流',
+    file: '文件',
 };
 const debugEl = document.getElementById('debug');
 const listEl = document.getElementById('list');

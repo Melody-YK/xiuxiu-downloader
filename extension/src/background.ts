@@ -134,7 +134,7 @@ async function handleResponse(details: chrome.webRequest.OnResponseStartedDetail
     const isBiliPlayurl = BILI_PLAYURL_RE.test(url);
     const cls = classify(url, contentType);
     // webRequest 兜底：B站 playurl 接口无媒体扩展名，单独识别（不依赖页面 Hook）
-    if (!isBiliPlayurl && (!cls.isMedia || cls.type === null)) return;
+    if (!isBiliPlayurl && cls.type === null) return;
 
     const dedupeKey = keyOf(details.tabId, url);
     if (memoryDedupe.has(dedupeKey)) return;

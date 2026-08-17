@@ -7,6 +7,7 @@ const TYPE_LABEL: Record<MediaType, string> = {
   dash: 'DASH',
   ts: '分片',
   stream: '分片流',
+  file: '文件',
 };
 
 const debugEl = document.getElementById('debug') as HTMLDivElement;
