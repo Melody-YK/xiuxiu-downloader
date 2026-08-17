@@ -18,7 +18,7 @@
   "build": {
     "appId": "com.downloader.sniffer",
     "productName": "嗅嗅下载器",
-    "files": ["gui/**/*", "lib/**/*", "build/icon.png", "build/tray-16.png", "build/tray-24.png", "build/tray-32.png", "build/tray-16-active.png", "build/tray-24-active.png", "build/tray-32-active.png", "package.json"],
+    "files": ["gui/**/*", "lib/**/*", "build/icon.svg", "build/icon.png", "build/tray-16.png", "build/tray-24.png", "build/tray-32.png", "build/tray-16-active.png", "build/tray-24-active.png", "build/tray-32-active.png", "package.json"],
     "win": { "target": ["portable"], "icon": "build/icon.png" },
     "portable": { "artifactName": "xiuxiu-downloader-${version}-portable.exe" },
     "electronLanguages": ["zh-CN", "en-US"]
