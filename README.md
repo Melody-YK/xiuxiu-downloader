@@ -1,125 +1,129 @@
 # 嗅嗅下载器（Xiuxiu Downloader）
 
-开源 IDM 平替：**浏览器扩展嗅探 + 桌面端多线程下载**。捕获网页中的视频/音频/HLS/DASH 地址，多线程分段下载、断点续传、限速；支持流媒体合并为 MP4（含 AES-128 解密、B站音视频轨合并）。名字由来：小狗一嗅，视频到手 🐶
+一个“浏览器扩展 + Windows 桌面端”的媒体下载工具：嗅探网页中的视频、音频、HLS/DASH 流媒体地址，并交给桌面端下载、合并和转封装。
 
-## 特性
+> 仅下载你有权保存的内容。项目不支持 DRM/Widevine/PlayReady。
 
-- 🕵️ **三层捕获**：DOM 扫描（视频旁「⬇ 下载」悬浮按钮）、webRequest 网络嗅探、fetch/XHR Hook（对付 MSE 动态站点）
-- 🚀 **多线程下载**：HTTP Range 分段 + IDM 式动态切分、断点续传、令牌桶限速、不支持 Range 自动降级单线程、**自适应连接**（检测到服务器按连接数限速自动降级重试）
-- 🎬 **流媒体**：HLS(m3u8)/DASH(mpd)/B站 playurl → 分片下载 → ffmpeg 合并 MP4；支持 AES-128 解密、fMP4、字节范围、无清单分片流
-- 🖥️ **Electron GUI**：任务队列、实时进度/速度、扩展捕获一键下载（自动携带 Cookie/Referer/UA）、下载历史持久化、下载管理（单个/批量/全部删除，可选同时删除已下载文件）、可设置同时任务数与默认线程数（持久化）
-- 🔗 **扩展 ↔ 桌面端联动**：native messaging（Chrome 官方协议）+ 本地 HTTP 推送，点击网页按钮直达桌面端开始下载
+## 下载什么文件？
 
-## 架构
+GitHub Releases：https://github.com/Melody-YK/xiuxiu-downloader/releases
 
-[网页] ─捕获─▶ [MV3 扩展] ─native messaging─▶ [桌面宿主 host.mjs]
-  │ DOM/webRequest/Hook        (stdio+长度前缀JSON)      │ HTTP 127.0.0.1:17321
-  └─────────────▶ [Electron GUI] ◀───────────────────────┘
-                       │
-                       ├─ lib/downloader.mjs   Range 多线程下载核心
-                       ├─ lib/pipeline.mjs    HLS/DASH/B站 流媒体管线
-                       └─ ffmpeg 合并/转封装
+| 文件 | 作用 | 适合谁 |
+|---|---|---|
+| xiuxiu-downloader-*-portable.exe | Windows 桌面端便携版，负责下载、任务管理和流媒体合并 | 所有人，双击即可运行 |
+| extension.zip | Chrome/Edge MV3 浏览器扩展 | 需要嗅探网页视频的人 |
+| xiuxiu-desktop-dir.zip | 桌面端完整解压目录 | 便携版无法启动或需要排查问题时使用 |
 
-## 目录结构
+普通用户通常只需要下载前两个：portable.exe 和 extension.zip。
 
-extension/   MV3 扩展（Chrome/Edge 通用，TypeScript）
-desktop/     桌面端（纯 Node 核心 + Electron GUI，零第三方运行时依赖）
-  lib/       下载核心 / 流媒体管线 / 任务队列 / 协议编解码
-  gui/       Electron 界面
-  cli.mjs / media-cli.mjs   命令行工具
+## 安装与首次使用（Windows）
 
-## 下载安装包
+### 1. 安装桌面端
 
-不想装开发环境？直接到 [Releases](https://github.com/Melody-YK/xiuxiu-downloader/releases) 下载：
+双击 portable.exe 即可运行。HLS/DASH、音视频合并和部分分片视频需要 ffmpeg：
 
-- `xiuxiu-downloader-*-portable.exe` —— 桌面端单文件版（双击即用，需系统安装 ffmpeg）
-- `extension.zip` —— 解压后在浏览器「加载解压缩的扩展」中选择该目录
+~~~powershell
+ffmpeg -version
+~~~
 
-每次打 tag（`v*`）时由 GitHub Actions 自动构建发布。
+如果提示找不到命令，请安装 ffmpeg，并把其目录加入系统 PATH，然后重新启动桌面端。
 
-## 快速开始（Windows）
+### 2. 安装浏览器扩展
 
-前置要求：**Node.js ≥ 22**、**ffmpeg**（加入 PATH）、**Edge 或 Chrome**
+1. 解压 extension.zip。
+2. 打开 Edge 的 edge://extensions/ 或 Chrome 的 chrome://extensions/。
+3. 开启“开发人员模式”。
+4. 点击“加载解压缩的扩展”，选择解压后的扩展目录。
 
-1. 克隆仓库
-2. 启动桌面端：
-   ```powershell
-   cd desktop
-   npm install
-   npm run gui
-   ```
-3. 构建并加载扩展：
-   ```powershell
-   cd extension
-   npm install
-   npm run build
-   ```
-   浏览器打开扩展管理页（Edge: `edge://extensions`，Chrome: `chrome://extensions`）→ 开启「开发人员模式」→「加载解压缩的扩展」→ 选择 `extension` 目录
-4. 注册桌面宿主（扩展 ↔ 桌面端通信，只需一次）：
-   ```powershell
-   cd desktop
-   npm run register
-   ```
+### 3. 注册桌面端通信
 
-## 使用
+如果扩展提示无法连接桌面端，在源码目录执行：
 
-| 场景 | 操作 |
+~~~powershell
+cd desktop
+npm install
+npm run register
+~~~
+
+## 怎么下载视频？
+
+### 普通直链
+
+把 MP4、WebM 等地址粘贴到桌面端，或在扩展捕获列表点击“下载”。
+
+### HLS/DASH 流媒体
+
+1. 打开视频网页并开始播放。
+2. 点击浏览器扩展图标。
+3. 在捕获列表选择 HLS/DASH 条目。
+4. 点击“发送到桌面端”或“下载”。
+
+### 连续分片视频
+
+部分网站会不断生成 MP4/fMP4/TS 分片，而不是提供完整视频文件。请让视频从头完整播放，等待分片数量停止增长后再下载；不要拖动进度条跳过中间片段，否则可能缺片或生成不可播放文件。
+
+### B 站视频
+
+选择带视频标题的 DASH 条目下载，桌面端会自动下载视频轨和音频轨并合并为 MP4。需要登录权限时，请从扩展捕获列表下载，以便携带 Cookie、Referer 和 User-Agent。
+
+## 主要功能
+
+- 页面按钮、网络请求、fetch/XHR Hook 三层嗅探。
+- HTTP Range 多线程下载、断点续传、限速和自适应连接数。
+- HLS（m3u8）、DASH（mpd）和 B 站 playurl 处理。
+- AES-128 HLS 解密、fMP4/TS 分片合并和 ffmpeg 转封装。
+- 下载队列、暂停/继续、历史记录和批量删除。
+- 显示实时速度、平均速度和最高速度。
+
+## 项目结构
+
+| 路径 | 作用 |
 |---|---|
-| 直链下载 | GUI 粘贴/拖入 URL，多线程自动加速 |
-| 视频旁按钮 | 直链 mp4/webm 站点播放后，视频左上角点「⬇ 下载」直达桌面端 |
-| 流媒体（m3u8/mpd） | 播放视频 → 点扩展图标 → 捕获列表选 HLS/DASH 条目 → 「发送到桌面端」→ GUI 下载 |
-| B站 | 播放 → 扩展列表选**带视频标题**的 DASH 条目 → 下载（音视频轨自动合并，需登录 Cookie 时扩展自动携带） |
-| 请求头透传 | GUI「扩展捕获」一键下载自动带 Cookie/Referer/UA，防盗链站点不再 403 |
+| extension/ | Chrome/Edge 扩展源码与构建产物 |
+| desktop/gui/ | Electron 图形界面与托盘逻辑 |
+| desktop/lib/downloader.mjs | 普通文件多线程下载、断点续传和限速 |
+| desktop/lib/pipeline.mjs | HLS/DASH/分片流/B 站媒体下载管线 |
+| desktop/lib/segments.mjs | 分片下载、AES-128 解密和初始化段处理 |
+| desktop/lib/merge.mjs | 分片拼接、ffmpeg 转封装和音视频合并 |
+| desktop/host.mjs | 扩展与桌面端之间的通信桥接 |
+| .github/workflows/release.yml | 打 tag 后自动测试、打包并创建 Release |
 
-命令行：
+## 从源码运行
 
-```powershell
-cd desktop
-node cli.mjs <url> -o 文件 -n 8 -l 4096                 # 直链多线程下载（-n 线程 -l 限速KB/s）
-node media-cli.mjs <m3u8|mpd 地址> -o out.mp4 --list    # 流媒体下载 / 列清晰度
-node media-cli.mjs <B站 playurl 地址> -o out.mp4        # B站音视频轨合并
-```
+要求：Node.js 22+、ffmpeg、Chrome 或 Edge。
 
-## 测试
+~~~powershell
+cd extension
+npm install
+npm test
+npm run build
 
-双端自动化测试（本地服务器全链路，含提速/续传/限速/解密/合并等）：
-
-```powershell
-cd extension && npm test    # 27 个用例
-cd desktop && npm test      # 44 个用例
-```
-
-## 打包 exe
-
-```powershell
-cd desktop
-npm run pack               # electron-builder portable 单文件（需可访问 GitHub 下载打包组件）
-npx electron-builder --win dir   # 网络受限时的替代：生成目录版，dist/win-unpacked 内 exe 双击即用
-```
-
-## 已知限制
-
-- **DRM**（Widevine/PlayReady）明确不支持
-- **blob:/MSE 站点**（如 YouTube）不显示视频旁按钮，但 popup 捕获列表仍可用
-- **无清单分片流站点**：分片地址随播放被捕获，需完整播放（可静音+倍速）后再下载；部分站点分片带时效签名
-- 商店政策：请勿以「下载付费平台视频」为卖点分发本扩展
+cd ..\desktop
+npm install
+npm test
+npm run gui
+~~~
 
 ## 常见问题
 
-| 现象 | 处理 |
-|---|---|
-| 扩展「发送到桌面端」提示宿主连接失败 | 执行 `cd desktop && npm run register`；确认 node 已安装 |
-| 下载 403 | 从「扩展捕获」列表点下载自动携带请求头，而不是手动粘贴 URL |
-| 分片流提示「分片不连续」 | 拖动进度条会跳过中间分片；从头完整播放后再下载 |
-| 改动扩展代码后无效果 | 重新 `npm run build` 并在扩展管理页点「重新加载」 |
+**扩展提示无法连接桌面端？**
 
-## 开发
+运行 cd desktop; npm run register，并确认桌面端正在运行。
 
-```powershell
-cd extension && npm run build      # 扩展编译（dist/ 已提交，可直接加载）
-cd desktop && npm run gui          # 开发模式启动 GUI（-- --smoke 为无窗口自检）
-```
+**下载结果是分片、不是视频？**
+
+不要直接下载单个 TS/M4S 分片；选择 HLS/DASH 清单，或等待无清单分片流捕获完整后再下载。
+
+**下载 403？**
+
+优先从扩展捕获列表点击下载，不要手动复制地址，这样会自动携带必要请求头。
+
+**清空或删除后还能重新嗅探吗？**
+
+可以。当前版本会清理相关去重状态，重新播放视频即可再次捕获。
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 Melody-YK
+MIT License，见 LICENSE。
+
+项目地址：https://github.com/Melody-YK/xiuxiu-downloader
