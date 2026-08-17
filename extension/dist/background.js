@@ -1,4 +1,4 @@
-import { applyCapture, bvidFromPageUrl, bvidFromPlayurl, classify, cleanBiliTitle, createEmptyState, extOf, extractRequestHeaders, getHeader, NATIVE_HOST_NAME, segmentGroupKey, STORAGE_KEY, } from './lib/sniff.js';
+import { applyCapture, bvidFromPageUrl, bvidFromPlayurl, classify, cleanBiliTitle, createEmptyState, extOf, extractRequestHeaders, getHeader, isBiliSegment, NATIVE_HOST_NAME, segmentGroupKey, STORAGE_KEY, } from './lib/sniff.js';
 // ---- 状态管理：内存为唯一事实源，chrome.storage 为持久化镜像 ----
 let state = createEmptyState();
 /** SW 生命周期内的快速去重（持久化去重依赖 state.entries / segmentKeys） */
@@ -14,11 +14,21 @@ async function loadState() {
         const raw = stored[STORAGE_KEY];
         if (isCaptureState(raw)) {
             const now = Date.now();
-            state = {
-                nextId: raw.nextId,
-                entries: raw.entries.filter((e) => now - (e.lastSeenAt ?? e.createdAt ?? now) < ENTRY_TTL),
-                segmentKeys: raw.segmentKeys,
-            };
+            let entries = raw.entries.filter((e) => now - (e.lastSeenAt ?? e.createdAt ?? now) < ENTRY_TTL);
+            // 迁移旧版本：清理同页临时分片，并合并重复 DASH 条目。
+            const manifests = new Set(entries.filter((e) => e.type === 'hls' || e.type === 'dash').map((e) => e.tabId));
+            entries = entries.filter((e) => !(e.type === 'stream' && (manifests.has(e.tabId) || isBiliSegment(e.url))));
+            const seen = new Set();
+            entries = entries.filter((e) => {
+                if (e.type !== 'dash' || e.dedupeKey === null || e.dedupeKey === undefined)
+                    return true;
+                const key = e.tabId + '|' + e.dedupeKey;
+                if (seen.has(key))
+                    return false;
+                seen.add(key);
+                return true;
+            });
+            state = { nextId: raw.nextId, entries, segmentKeys: raw.segmentKeys };
         }
     }
     catch (err) {

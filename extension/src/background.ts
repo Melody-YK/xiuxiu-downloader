@@ -8,6 +8,7 @@ import {
   extOf,
   extractRequestHeaders,
   getHeader,
+  isBiliSegment,
   NATIVE_HOST_NAME,
   segmentGroupKey,
   STORAGE_KEY,
@@ -33,11 +34,19 @@ async function loadState(): Promise<void> {
     const raw: unknown = stored[STORAGE_KEY];
     if (isCaptureState(raw)) {
       const now = Date.now();
-      state = {
-        nextId: raw.nextId,
-        entries: raw.entries.filter((e) => now - (e.lastSeenAt ?? e.createdAt ?? now) < ENTRY_TTL),
-        segmentKeys: raw.segmentKeys,
-      };
+      let entries = raw.entries.filter((e) => now - (e.lastSeenAt ?? e.createdAt ?? now) < ENTRY_TTL);
+      // 迁移旧版本：清理同页临时分片，并合并重复 DASH 条目。
+      const manifests = new Set(entries.filter((e) => e.type === 'hls' || e.type === 'dash').map((e) => e.tabId));
+      entries = entries.filter((e) => !(e.type === 'stream' && (manifests.has(e.tabId) || isBiliSegment(e.url))));
+      const seen = new Set<string>();
+      entries = entries.filter((e) => {
+        if (e.type !== 'dash' || e.dedupeKey === null || e.dedupeKey === undefined) return true;
+        const key = e.tabId + '|' + e.dedupeKey;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      state = { nextId: raw.nextId, entries, segmentKeys: raw.segmentKeys };
     }
   } catch (err) {
     console.warn('[sniffer] 读取捕获记录失败', err);

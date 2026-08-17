@@ -17,6 +17,23 @@ function extractMediaUrl(el) {
 }
 const processed = new WeakSet();
 let scanTimer = null;
+let contextInvalidated = false;
+function sendRuntimeMessage(message, callback) {
+    if (contextInvalidated)
+        return;
+    try {
+        chrome.runtime.sendMessage(message, (response) => {
+            if (chrome.runtime.lastError !== undefined) {
+                contextInvalidated = true;
+                return;
+            }
+            callback?.(response);
+        });
+    }
+    catch {
+        contextInvalidated = true;
+    }
+}
 function throttle(fn, ms) {
     let last = 0;
     return () => {
@@ -81,7 +98,7 @@ function attachButton(el) {
             }, 1500);
             return;
         }
-        chrome.runtime.sendMessage({ type: 'content:download', url }, (resp) => {
+        sendRuntimeMessage({ type: 'content:download', url }, (resp) => {
             const ok = typeof resp === 'object' && resp !== null && resp.ok === true;
             btn.textContent = ok ? '✓ 已发送' : '✕ 失败';
             setTimeout(() => {
@@ -104,14 +121,12 @@ const rootObserver = new MutationObserver(() => scheduleScan());
 rootObserver.observe(document.documentElement, { childList: true, subtree: true });
 scheduleScan();
 // ---- 第 3 层捕获：请求后台向主世界注入 fetch/XHR 钩子，并转发钩子回报的媒体 URL ----
-void chrome.runtime.sendMessage({ type: 'hook:inject' }).catch(() => undefined);
+sendRuntimeMessage({ type: 'hook:inject' });
 window.addEventListener('message', (ev) => {
     if (ev.source !== window)
         return;
     const data = ev.data;
     if (data !== null && typeof data === 'object' && data.source === 'sniffer-page-hook' && typeof data.url === 'string') {
-        void chrome.runtime
-            .sendMessage({ type: 'hook:url', url: data.url, bvid: typeof data.bvid === 'string' ? data.bvid : '', title: typeof data.title === 'string' ? data.title : '' })
-            .catch(() => undefined);
+        sendRuntimeMessage({ type: 'hook:url', url: data.url, bvid: typeof data.bvid === 'string' ? data.bvid : '', title: typeof data.title === 'string' ? data.title : '' });
     }
 });

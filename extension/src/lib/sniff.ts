@@ -198,8 +198,16 @@ export function bvidFromPageUrl(url: string): string {
 /** B站 CDN 的 m4s/ts 分片：playurl 未捕获时直接丢弃，避免刷屏的无效条目 */
 export function isBiliSegment(url: string): boolean {
   try {
-    const h = new URL(url).host.toLowerCase();
-    return /bilivideo\.(com|cn)|bilibili\.com/.test(h) && /\.(m4s|ts)([?#]|$)/i.test(url);
+    const u = new URL(url);
+    const path = u.pathname.toLowerCase();
+    const isSegment = /\.(m4s|ts)(?:$)/i.test(path);
+    if (!isSegment) return false;
+    // B站 CDN 域名会动态切换（bilivideo、mcdn、edge.mountaintoys 等），
+    // 不能只按域名判断；这些播放参数和 upgcxcode 路径才是稳定特征。
+    const q = u.searchParams;
+    return /\/upgcxcode\//i.test(path) &&
+      q.get('gen') === 'playurlv3' &&
+      (q.get('bvc') === 'vod' || q.has('mcdnid') || q.has('upsig'));
   } catch {
     return false;
   }
@@ -257,6 +265,20 @@ export function applyCapture(state: CaptureState, cap: Capture): CaptureResult {
   const existing = state.entries.find(
     (e) => e.tabId === cap.tabId && (e.url === cap.url || (cap.dedupeKey !== undefined && e.dedupeKey === cap.dedupeKey)),
   );
+  // 先处理已有清单：无论分片 groupKey 是否一致，都归并到同页 DASH/HLS。
+  if (cap.type !== 'hls' && cap.type !== 'dash' && (cap.type === 'ts' || cap.type === 'video' || cap.type === 'audio')) {
+    const ext = (cap.ext ?? '').toLowerCase();
+    if ((ext === 'm4s' || ext === 'ts') && cap.groupKey !== undefined && cap.groupKey !== null) {
+      const host = findSegmentHost(state, cap.tabId, ext);
+      if (host !== null) {
+        host.segmentCount += 1;
+        host.lastSeenAt = at;
+        moveToFront(state, host);
+        return { changed: 'segmented', entry: host };
+      }
+    }
+  }
+
   if (existing !== undefined) {
     existing.lastSeenAt = at;
     if (cap.size != null && existing.size == null) existing.size = cap.size;
@@ -334,6 +356,8 @@ export function applyCapture(state: CaptureState, cap: Capture): CaptureResult {
 
     // 无清单宿主：按 groupKey 聚成「分片流」条目；完全无法归类的孤立分片直接丢弃
     // （孤立分片会刷屏，且多为短期签名地址，单独下载无意义、下载也会失败）
+    if (isBiliSegment(cap.url)) return { changed: 'ignored' };
+
     if (cap.groupKey !== undefined && cap.groupKey !== null && cap.groupKey !== '') {
       let grouped = state.entries.find(
         (e) => e.tabId === cap.tabId && e.groupKey === cap.groupKey && (e.type === 'stream' || e.type === 'ts'),
