@@ -69,6 +69,8 @@ const sTrayEl = document.getElementById('s-tray');
 const sLaunchEl = document.getElementById('s-launch');
 const sNotifyEl = document.getElementById('s-notify');
 const sClipEl = document.getElementById('s-clip');
+const checkUpdateEl = document.getElementById('check-update');
+const updateStatusEl = document.getElementById('update-status');
 const PRESETS = {
   balanced: { maxConcurrent: 2, defaultThreads: 8 },
   aggressive: { maxConcurrent: 4, defaultThreads: 16 },
@@ -111,6 +113,18 @@ sNotifyEl.addEventListener('change', () => {
 });
 sClipEl.addEventListener('change', () => {
   void bridge.setSettings({ clipboardWatch: sClipEl.checked });
+});
+checkUpdateEl.addEventListener('click', async () => {
+  checkUpdateEl.disabled = true;
+  updateStatusEl.textContent = '正在检查…';
+  try {
+    const r = await bridge.checkUpdate();
+    if (r.error) updateStatusEl.textContent = '检查失败：' + r.error;
+    else if (r.latest && r.latest !== r.current) {
+      updateStatusEl.textContent = '发现 v' + r.latest;
+      if (confirm('发现新版本 v' + r.latest + '，打开下载页面？')) void bridge.openExternal(r.url);
+    } else updateStatusEl.textContent = '已是最新版本 v' + r.current;
+  } finally { checkUpdateEl.disabled = false; }
 });
 
 // ---- 首次使用指引 ----

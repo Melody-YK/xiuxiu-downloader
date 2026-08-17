@@ -610,6 +610,16 @@ function regDefaultValue(key) {
   });
 }
 
+ipcMain.handle('app:checkUpdate', async () => {
+  try {
+    const res = await fetch('https://api.github.com/repos/Melody-YK/xiuxiu-downloader/releases/latest', { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'xiuxiu-downloader' } });
+    if (!res.ok) throw new Error('GitHub API HTTP ' + res.status);
+    const data = await res.json();
+    const tag = typeof data?.tag_name === 'string' ? data.tag_name : '';
+    return { current: app.getVersion(), latest: tag.replace(/^v/i, ''), url: data?.html_url ?? 'https://github.com/Melody-YK/xiuxiu-downloader/releases' };
+  } catch (err) { return { error: err?.message ?? String(err) }; }
+});
+
 ipcMain.handle('util:openExternal', async (_e, url) => {
   if (typeof url !== 'string') return false;
   // 浏览器内部页（edge://chrome://）在 Windows 上 ShellExecute 打不开，直接拉起浏览器进程
