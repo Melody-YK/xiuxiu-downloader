@@ -110,6 +110,10 @@ async function handleResponse(details) {
         const contentType = getHeader(headers, 'content-type') ?? '';
         const isBiliPlayurl = BILI_PLAYURL_RE.test(url);
         const cls = classify(url, contentType);
+        const disposition = getHeader(headers, 'content-disposition') ?? '';
+        // 无扩展名的 octet-stream 很多是 API/统计响应；只有明确声明附件时才当作普通文件。
+        if (!isBiliPlayurl && cls.type === 'file' && cls.ext === null && !/\battachment\b/i.test(disposition))
+            return;
         // webRequest 兜底：B站 playurl 接口无媒体扩展名，单独识别（不依赖页面 Hook）
         if (!isBiliPlayurl && cls.type === null)
             return;
