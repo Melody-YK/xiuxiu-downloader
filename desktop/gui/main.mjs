@@ -246,19 +246,9 @@ function createTray() {
   });
 }
 
-// 多分辨率托盘图标（Electron 托盘不支持 SVG，必须位图；16/24/32 三档对应 100%/150%/200% DPI，不发糊）
-// active=true 时紫色「下载中」变样
-function trayIcon(active) {
-  const img = nativeImage.createEmpty();
-  const names = ['tray-16', 'tray-24', 'tray-32'];
-  const scales = [1.0, 1.5, 2.0];
-  for (let i = 0; i < names.length; i += 1) {
-    img.addRepresentation({
-      scaleFactor: scales[i],
-      buffer: readFileSync(join(here, '..', 'build', names[i] + (active ? '-active' : '') + '.png')),
-    });
-  }
-  return img;
+// 使用 512px 主图标，由系统按托盘尺寸缩放，避免低分辨率位图发糊。
+function trayIcon(_active) {
+  return nativeImage.createFromPath(join(here, '..', 'build', 'icon.png'));
 }
 
 function fmtSpeed(bps) {
