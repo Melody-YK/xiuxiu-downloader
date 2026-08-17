@@ -44,16 +44,6 @@
     <button type="button" id="ignore">忽略</button>
     <button type="button" id="go" class="primary">下载</button>
   </div>
-  <script>
-    const params = new URLSearchParams(location.search);
-    const url = params.get('url') ?? '';
-    document.getElementById('u').textContent = url;
-    document.getElementById('u').title = url;
-    document.getElementById('ignore').addEventListener('click', () => window.api.closeClip());
-    document.getElementById('go').addEventListener('click', () => {
-      if (url !== '') window.api.addTask({ url, kind: 'auto' });
-      window.api.closeClip();
-    });
-  </script>
+  <script src="clip-popup.js"></script>
 </body>
 </html>

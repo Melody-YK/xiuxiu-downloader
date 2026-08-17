@@ -159,7 +159,8 @@ if (!gotLock) {
                   )
                   .then((txt) => {
                     console.log('[smoke] 捕获条目数=' + captures.length + ' 任务数=' + jobs.getSnapshot().length + ' 渲染层[api|cap-count|task行数]=' + txt);
-                    app.exit(captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') && txt.includes('V1/G1') ? 0 : 1);
+                    const mainOk = captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') && txt.includes('V1/G1');
+                    smokeCheckClipPopup(mainOk);
                   });
               }, 400);
             });
@@ -359,6 +360,43 @@ function showClipPopup(url) {
       // 忽略
     }
   }, 20000);
+}
+
+// 冒烟：剪贴板弹窗全链路自检——脚本执行（标题含 URL）、点「下载」建任务、弹窗关闭
+function smokeCheckClipPopup(mainOk) {
+  const url = 'http://127.0.0.1:9/smoke-clip.mp4';
+  showClipPopup(url);
+  if (clipWin === null) {
+    console.log('[smoke][clip] 弹窗未创建');
+    app.exit(mainOk ? 0 : 1);
+    return;
+  }
+  clipWin.webContents.once('did-finish-load', () => {
+    void clipWin.webContents
+      .executeJavaScript("document.getElementById('u').textContent + '|' + document.title")
+      .then((txt) => {
+        console.log('[smoke][clip] 弹窗内容=' + txt);
+        const scriptOk = txt.startsWith(url + '|剪贴板下载:');
+        void clipWin.webContents
+          .executeJavaScript("document.getElementById('go').click()")
+          .then(() => {
+            setTimeout(() => {
+              const taskAdded = jobs.getSnapshot().some((t) => t.url === url);
+              const winClosed = clipWin === null || clipWin.isDestroyed();
+              console.log('[smoke][clip] 任务已创建=' + taskAdded + ' 弹窗已关闭=' + winClosed);
+              app.exit(mainOk && scriptOk && taskAdded && winClosed ? 0 : 1);
+            }, 400);
+          })
+          .catch((err) => {
+            console.log('[smoke][clip] 点击失败: ' + String(err));
+            app.exit(1);
+          });
+      })
+      .catch((err) => {
+        console.log('[smoke][clip] 脚本执行失败: ' + String(err));
+        app.exit(1);
+      });
+  });
 }
 
 function startIngestServer() {
