@@ -46,7 +46,20 @@ async function downloadStream(opts) {
   const tasks = urls.map((u) => ({ url: u, byterange: null, key: null, map: null }));
   const files = await downloadSegments(tasks, { headers, connections, workDir, signal, onProgress });
   onPhase('ffmpeg 拼接分片');
-  await ffmpegConcat(files, out);
+  try {
+    // 每片都是独立 MP4 时使用 concat demuxer。
+    await ffmpegConcat(files, out);
+  } catch (firstError) {
+    // 部分站点返回 fMP4/TS 片段，片段本身没有 moov；改为二进制顺序拼接后再转封装。
+    onPhase('尝试按 fMP4/TS 顺序拼接');
+    const merged = await concatFiles(files, join(workDir, 'merged-stream.bin'));
+    try {
+      await ffmpegRemux(merged, out);
+    } catch (fallbackError) {
+      const detail = fallbackError?.message ?? firstError?.message ?? String(fallbackError);
+      throw new Error('分片无法组成可播放视频：' + detail + '。请从头完整播放后重新捕获，且不要在播放结束前点击下载。');
+    }
+  }
   if (!keep) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   return { out, kind: 'stream', segments: urls.length, label: '分片流' };
 }

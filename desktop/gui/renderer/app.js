@@ -434,7 +434,11 @@ function renderCaptures() {
     dl.textContent = '下载';
     dl.addEventListener('click', () => {
       if (c.mediaType === 'ts') {
-        showError('这是单个分片地址，不能直接下载；请在列表里选择 HLS/DASH 清单条目（B站选 playurl 接口条目）');
+        showError('这是单个分片地址，不能直接下载；请等待分片流捕获完成后再下载');
+        return;
+      }
+      if (c.mediaType === 'stream' && c.truncated === true) {
+        showError('分片仍在增长，当前捕获不完整。请让视频从头完整播放，等分片数量停止增长后再点击下载');
         return;
       }
       const headers = {};

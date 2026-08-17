@@ -449,6 +449,7 @@ function startIngestServer() {
         });
         // 网页下载按钮（autoDownload）直达：自动建立下载任务并带上请求头
         if (msg.autoDownload === true && typeof e.url === 'string' && e.url !== '') {
+          if (e.mediaType === 'stream' && e.truncated === true) continue;
           const headers = {};
           if (e.cookie) headers.Cookie = e.cookie;
           if (e.referer) headers.Referer = e.referer;
