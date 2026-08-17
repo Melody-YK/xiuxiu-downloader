@@ -155,11 +155,11 @@ if (!gotLock) {
               setTimeout(() => {
                 void win.webContents
                   .executeJavaScript(
-                    'typeof window.api + "|" + document.getElementById("cap-count").textContent + "|" + document.getElementById("tasks").childElementCount + "|" + (document.getElementById("guide-modal") !== null ? 1 : 0) + "|" + (document.getElementById("s-launch") !== null ? 1 : 0) + "|" + (() => { const g = document.getElementById("guide-modal"); const wasShown = g !== null && g.hidden === false; g.hidden = true; return (wasShown ? "V1" : "V0") + "/" + (getComputedStyle(g).display === "none" ? "G1" : "G0"); })()',
+                    'typeof window.api + "|" + document.getElementById("cap-count").textContent + "|" + document.getElementById("tasks").childElementCount + "|" + (document.getElementById("guide-modal") !== null ? 1 : 0) + "|" + (document.getElementById("s-launch") !== null ? 1 : 0) + "|" + (() => { const g = document.getElementById("guide-modal"); const wasShown = g !== null && g.hidden === false; g.hidden = true; return (wasShown ? "V1" : "V0") + "/" + (getComputedStyle(g).display === "none" ? "G1" : "G0"); })() + "|" + (() => { const im = document.querySelector(".brand-mark"); return im !== null && im.tagName === "IMG" && im.complete && im.naturalWidth > 0 ? "B1" : "B0"; })()',
                   )
                   .then((txt) => {
                     console.log('[smoke] 捕获条目数=' + captures.length + ' 任务数=' + jobs.getSnapshot().length + ' 渲染层[api|cap-count|task行数]=' + txt);
-                    const mainOk = captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') && txt.includes('V1/G1');
+                    const mainOk = captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') && txt.includes('V1/G1') && txt.includes('B1');
                     smokeCheckClipPopup(mainOk);
                   });
               }, 400);
@@ -246,7 +246,8 @@ function createTray() {
   });
 }
 
-// 多分辨率托盘图标（active=绿色「下载中」变样）
+// 多分辨率托盘图标（Electron 托盘不支持 SVG，必须位图；16/24/32 三档对应 100%/150%/200% DPI，不发糊）
+// active=true 时紫色「下载中」变样
 function trayIcon(active) {
   const img = nativeImage.createEmpty();
   const names = ['tray-16', 'tray-24', 'tray-32'];

@@ -163,6 +163,7 @@ button.primary, #f-add { background:linear-gradient(135deg,var(--primary),#7b70f
 button.primary:hover, #f-add:hover { background:linear-gradient(135deg,var(--primary-dark),#665cff); }
 details#settings-panel, details#f-headers, #task-toolbar { border-color:var(--line); border-radius:12px; box-shadow:0 3px 14px #243b5308; }
 summary { cursor:pointer; font-weight:600; }
+.brand-mark { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px; object-fit: cover; }
 .summary-icon { color:var(--primary); margin-right:5px; }
 .task, .cap { border-color:var(--line); border-radius:12px; box-shadow:0 3px 14px #243b5308; }
 .t-bar { height:7px; background:#edf0f7; }
