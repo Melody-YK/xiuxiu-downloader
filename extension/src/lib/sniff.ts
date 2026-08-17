@@ -199,7 +199,7 @@ export function bvidFromPageUrl(url: string): string {
 export function isBiliSegment(url: string): boolean {
   try {
     const h = new URL(url).host.toLowerCase();
-    return /bilivideo\.com|bilibili\.com/.test(h) && /\.(m4s|ts)([?#]|$)/i.test(url);
+    return /bilivideo\.(com|cn)|bilibili\.com/.test(h) && /\.(m4s|ts)([?#]|$)/i.test(url);
   } catch {
     return false;
   }
