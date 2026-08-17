@@ -237,6 +237,14 @@ export class JobManager extends EventEmitter {
     const abort = new AbortController();
     t.abort = abort;
     t.status = 'running';
+    const speedStartedAt = Date.now();
+    let speedPeak = 0;
+    const withSpeedStats = (progress, bytesCompleted) => {
+      const current = Number(progress.speed) || 0;
+      speedPeak = Math.max(speedPeak, current);
+      const elapsed = Math.max(1, Date.now() - speedStartedAt);
+      return { ...progress, speed: current, avgSpeed: bytesCompleted > 0 ? bytesCompleted * 1000 / elapsed : 0, peakSpeed: speedPeak };
+    };
     this.emit('event', { id: t.id, type: 'status', data: this.snapshotOf(t) });
     try {
       if (t.isMedia) {
@@ -256,9 +264,10 @@ export class JobManager extends EventEmitter {
             t.progress = {
               completed: p.completed ?? p.done ?? 0,
               total: p.total ?? null,
-              speed: p.speed ?? undefined,
               unit: p.unit ?? 'segments',
             };
+            const bytes = Number(p.completedBytes) || 0;
+            t.progress = withSpeedStats({ ...t.progress, speed: p.speed, avgSpeed: p.avgSpeed, peakSpeed: p.peakSpeed }, bytes);
             this.emit('event', { id: t.id, type: 'progress', data: this.snapshotOf(t) });
           },
         });
@@ -273,7 +282,7 @@ export class JobManager extends EventEmitter {
           adaptiveConnections: t.adaptiveConnections,
           signal: abort.signal,
           onProgress: (p) => {
-            t.progress = { completed: p.completed, total: p.total, speed: p.speed, unit: 'bytes' };
+            t.progress = withSpeedStats({ completed: p.completed, total: p.total, unit: 'bytes' }, Number(p.completed) || 0);
             this.emit('event', { id: t.id, type: 'progress', data: this.snapshotOf(t) });
           },
         });

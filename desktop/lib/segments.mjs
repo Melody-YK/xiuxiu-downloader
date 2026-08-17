@@ -53,6 +53,11 @@ export async function downloadSegments(tasks, opts) {
   const results = new Array(tasks.length);
   let next = 0;
   let done = 0;
+  let completedBytes = 0;
+  let lastBytes = 0;
+  let lastAt = Date.now();
+  let peakSpeed = 0;
+  const startedAt = lastAt;
   let firstErr = null;
 
   const worker = async () => {
@@ -81,7 +86,14 @@ export async function downloadSegments(tasks, opts) {
         await writeFile(file, data);
         results[i] = file;
         done += 1;
-        onProgress({ done, total: tasks.length, index: i, bytes: data.length });
+        completedBytes += data.length;
+        const now = Date.now();
+        const dt = now - lastAt;
+        const speed = dt > 0 ? (completedBytes - lastBytes) * 1000 / dt : 0;
+        peakSpeed = Math.max(peakSpeed, speed);
+        lastBytes = completedBytes;
+        lastAt = now;
+        onProgress({ done, total: tasks.length, index: i, bytes: data.length, completedBytes, speed, avgSpeed: completedBytes * 1000 / Math.max(1, now - startedAt), peakSpeed });
       } catch (err) {
         if (firstErr === null) firstErr = err;
       }

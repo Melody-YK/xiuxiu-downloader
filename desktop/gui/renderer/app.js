@@ -345,12 +345,12 @@ function buildTaskRow() {
       if (t.phase !== '') parts.push(t.phase);
       if (t.progress !== null && t.progress !== undefined) {
         if (t.progress.unit === 'segments') {
-          parts.push('分片 ' + t.progress.completed + '/' + t.progress.total);
+          parts.push('分片 ' + t.progress.completed + '/' + t.progress.total + ' · 实时 ' + fmtSize(t.progress.speed ?? 0) + '/s · 平均 ' + fmtSize(t.progress.avgSpeed ?? 0) + '/s · 最高 ' + fmtSize(t.progress.peakSpeed ?? 0) + '/s');
           const pct = t.progress.total > 0 ? (t.progress.completed / t.progress.total) * 100 : 0;
           bar.style.width = Math.min(100, pct).toFixed(1) + '%';
         } else {
           const pct = t.progress.total > 0 ? (t.progress.completed / t.progress.total) * 100 : 0;
-          parts.push(Math.min(100, pct).toFixed(1) + '%  ' + fmtSize(t.progress.speed ?? 0) + '/s');
+          parts.push(Math.min(100, pct).toFixed(1) + '%  实时 ' + fmtSize(t.progress.speed ?? 0) + '/s · 平均 ' + fmtSize(t.progress.avgSpeed ?? 0) + '/s · 最高 ' + fmtSize(t.progress.peakSpeed ?? 0) + '/s');
           bar.style.width = Math.min(100, pct).toFixed(1) + '%';
         }
       }
