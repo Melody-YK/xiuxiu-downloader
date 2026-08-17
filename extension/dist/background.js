@@ -344,8 +344,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (t === 'entry:remove') {
         const url = typeof message.url === 'string' ? (message.url ?? '') : '';
         if (url !== '') {
-            state.entries = state.entries.filter((e) => e.url !== url);
-            state.segmentKeys = state.segmentKeys.filter((k) => !k.endsWith('|' + url));
+            const removed = state.entries.filter((e) => e.url === url);
+            const removedGroups = new Set(removed.map((e) => e.groupKey).filter((v) => typeof v === 'string' && v !== ''));
+            state.entries = state.entries.filter((e) => e.url !== url && !(e.groupKey !== undefined && e.groupKey !== null && removedGroups.has(e.groupKey)));
+            // 删除分片流后清掉相关持久化分片键，否则相同视频重新播放仍会被判为重复。
+            const removedUrls = new Set(removed.flatMap((e) => e.segmentUrls ?? [e.url]));
+            state.segmentKeys = state.segmentKeys.filter((k) => ![...removedUrls].some((u) => k.endsWith('|' + u)));
+            // 内存去重只服务于当前请求生命周期；删除后清空它不会影响 state.entries 的持久化去重。
+            memoryDedupe.clear();
             schedulePersist();
         }
         sendResponse({ ok: true });
