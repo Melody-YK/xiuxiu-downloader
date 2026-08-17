@@ -113,6 +113,16 @@ export function bvidFromPageUrl(url) {
         return 'av' + (av[1] ?? '');
     return '';
 }
+/** B站 CDN 的 m4s/ts 分片：playurl 未捕获时直接丢弃，避免刷屏的无效条目 */
+export function isBiliSegment(url) {
+    try {
+        const h = new URL(url).host.toLowerCase();
+        return /bilivideo\.com|bilibili\.com/.test(h) && /\.(m4s|ts)([?#]|$)/i.test(url);
+    }
+    catch {
+        return false;
+    }
+}
 /** 从 <video>/<audio> 元素提取可下载的媒体地址（跳过 blob:/data:，兼容 MSE 占位） */
 export function extractMediaUrl(el) {
     const candidates = [el.currentSrc, el.src];
@@ -178,6 +188,14 @@ export function applyCapture(state, cap) {
     }
     // 无清单站点的连续 mp4 分片：第二片出现时把首片条目标记为「分片流」
     if (cap.groupKey !== undefined && cap.groupKey !== null && (cap.type === 'video' || cap.type === 'audio')) {
+        // 已有 HLS/DASH 清单时，任何同页的 MP4/fMP4 分片都只计数，不单独列出。
+        const manifestHost = findSegmentHost(state, cap.tabId, cap.ext ?? 'mp4');
+        if (manifestHost !== null) {
+            manifestHost.segmentCount += 1;
+            manifestHost.lastSeenAt = at;
+            moveToFront(state, manifestHost);
+            return { changed: 'segmented', entry: manifestHost };
+        }
         const grouped = state.entries.find((e) => e.tabId === cap.tabId &&
             e.groupKey === cap.groupKey &&
             (e.type === 'video' || e.type === 'audio' || e.type === 'stream'));
@@ -217,6 +235,11 @@ export function applyCapture(state, cap) {
             host.lastSeenAt = at;
             moveToFront(state, host);
             return { changed: 'segmented', entry: host };
+        }
+        // B站 CDN 的 m4s/ts 分片：无清单宿主时直接丢弃（单段无下载价值，签名短期失效，
+        // 刷新页面后 playurl 会被捕获得到 dash 条目，届时分片自然归入）
+        if (isBiliSegment(cap.url)) {
+            return { changed: 'ignored' };
         }
         // 无清单宿主：按 groupKey 聚成「分片流」条目；完全无法归类的孤立分片直接丢弃
         // （孤立分片会刷屏，且多为短期签名地址，单独下载无意义、下载也会失败）
@@ -286,11 +309,24 @@ export function applyCapture(state, cap) {
     };
     state.nextId += 1;
     state.entries.unshift(entry);
+    // m4s 可能先于 DASH/playurl 到达：先产生的临时分片流应归并到同页清单，
+    // 否则每个音视频分组都会显示成“分片 ×1”。真正下载仍走 DASH/playurl 管线。
+    if (entry.type === 'dash' || entry.type === 'hls') {
+        const pending = state.entries.filter((e) => e !== entry && e.tabId === entry.tabId && e.type === 'stream' && (e.ext === 'm4s' || e.ext === 'mp4'));
+        if (pending.length > 0) {
+            entry.segmentCount += pending.reduce((sum, e) => sum + (e.segmentCount || e.segmentUrls?.length || 0), 0);
+            for (const e of pending) {
+                const i = state.entries.indexOf(e);
+                if (i >= 0)
+                    state.entries.splice(i, 1);
+            }
+        }
+    }
     if (state.entries.length > MAX_ENTRIES)
         state.entries.length = MAX_ENTRIES;
     return { changed: 'added', entry };
 }
-/** m4s 优先归到 dash，ts 优先归到 hls（entries 保持最新在前） */
+/** fMP4/m4s 优先归到 DASH，TS 优先归到 HLS；普通 MP4 分片也按 DASH 优先。 */
 function findSegmentHost(state, tabId, segExt) {
     const order = segExt === 'm4s' ? ['dash', 'hls'] : ['hls', 'dash'];
     for (const t of order) {
