@@ -152,6 +152,13 @@ guideClose.addEventListener('click', () => {
   guideModal.hidden = true;
   void bridge.setSettings({ seenGuide: true });
 });
+guideModal.addEventListener('click', (e) => {
+  // 点遮罩空白处也可关闭
+  if (e.target === guideModal) {
+    guideModal.hidden = true;
+    void bridge.setSettings({ seenGuide: true });
+  }
+});
 helpBtn.addEventListener('click', () => {
   void showGuide();
 });

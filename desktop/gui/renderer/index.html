@@ -8,18 +8,18 @@
 </head>
 <body>
   <header>
-    <h1>嗅嗅下载器</h1>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">⌁</span><div><h1>嗅嗅下载器</h1><span class="brand-sub">聪明、安静地下载</span></div></div>
     <nav>
-      <button id="tab-dl" class="tab active" type="button">下载</button>
-      <button id="tab-cap" class="tab" type="button">扩展捕获 <span id="cap-count">0</span></button>
-      <button id="help-btn" class="tab ghost" type="button" title="使用帮助">帮助</button>
+      <button id="tab-dl" class="tab active" type="button"><span aria-hidden="true">↓</span> 下载</button>
+      <button id="tab-cap" class="tab" type="button"><span aria-hidden="true">◉</span> 扩展捕获 <span id="cap-count">0</span></button>
+      <button id="help-btn" class="tab ghost" type="button" title="使用帮助"><span aria-hidden="true">?</span> 帮助</button>
     </nav>
   </header>
 
   <div id="err-banner" hidden></div>
   <main id="view-dl">
     <details id="settings-panel">
-      <summary>设置</summary>
+      <summary><span class="summary-icon" aria-hidden="true">⚙</span> 设置</summary>
       <p class="setting-hint">不知道填多少？选一个预设模式即可：</p>
       <label class="radio"><input type="radio" name="mode" value="balanced"> <b>均衡（推荐）</b><span class="desc">同时 2 个任务、每任务 8 线程——大多数场景的最佳平衡</span></label>
       <label class="radio"><input type="radio" name="mode" value="aggressive"> <b>激进</b><span class="desc">同时 4 个任务、每任务 16 线程——一次下很多东西时把带宽拉满</span></label>
@@ -46,7 +46,7 @@
       <span class="field"><label for="f-limit">限速 KB/s</label><input id="f-limit" type="number" min="0" step="64" value="0"></span>
       <input id="f-out" placeholder="保存路径（默认：下载文件夹）">
       <button type="button" id="f-browse" title="选择保存位置">选择…</button>
-      <button type="submit" id="f-add">添加下载</button>
+      <button type="submit" id="f-add"><span aria-hidden="true">↓</span> 添加下载</button>
     </form>
     <div class="form-hint">ℹ <span>线程数 = 该任务用几个连接下载；勾选「自动调节」后，检测到服务器按连接限速（429/403/连接被掐）会自动降级重试。限速 = 限制该任务速度（KB/s），0 为不限速。</span></div>
     <details id="f-headers">

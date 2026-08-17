@@ -1,10 +1,10 @@
-:root { color-scheme: light; }
+:root { color-scheme: light; --ink:#172033; --muted:#718096; --line:#e7eaf2; --primary:#635bff; --primary-dark:#5148e8; --soft:#f4f5ff; }
 * { box-sizing: border-box; }
 body {
   margin: 0;
   font: 13px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
-  background: #f7f8fa;
-  color: #1f2328;
+  background: linear-gradient(135deg, #f8f9ff 0%, #f5fbff 100%);
+  color: var(--ink);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -144,6 +144,33 @@ button.danger:hover { background: #ffebe9; }
 .c-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .c-meta { flex: none; max-width: 240px; color: #57606a; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+
+.brand { display:flex; align-items:center; gap:10px; }
+.brand-mark { display:grid; place-items:center; width:32px; height:32px; border-radius:11px; color:#fff; font-size:24px; font-weight:700; background:linear-gradient(135deg,#635bff,#22c7e8); box-shadow:0 7px 16px #635bff38; }
+.brand-sub { display:block; color:var(--muted); font-size:10px; line-height:1.1; }
+header { padding:12px 18px; border-bottom:1px solid var(--line); box-shadow:0 2px 12px #273c5b08; }
+h1 { color:var(--ink); font-size:16px; letter-spacing:.02em; }
+nav { gap:6px; }
+.tab { padding:7px 13px; color:var(--muted); border-radius:9px; font-weight:600; }
+.tab:hover { background:var(--soft); color:var(--primary); }
+.tab.active { background:linear-gradient(135deg,var(--primary),#7b70ff); box-shadow:0 5px 12px #635bff38; }
+main { padding:18px; }
+input, select, button { border-color:var(--line); border-radius:9px; }
+input:focus, select:focus { outline:3px solid #635bff1c; border-color:var(--primary); }
+button { transition:transform .15s, box-shadow .15s, background .15s; }
+button:hover { transform:translateY(-1px); box-shadow:0 5px 12px #243b5312; }
+button.primary, #f-add { background:linear-gradient(135deg,var(--primary),#7b70ff); border-color:transparent; }
+button.primary:hover, #f-add:hover { background:linear-gradient(135deg,var(--primary-dark),#665cff); }
+details#settings-panel, details#f-headers, #task-toolbar { border-color:var(--line); border-radius:12px; box-shadow:0 3px 14px #243b5308; }
+summary { cursor:pointer; font-weight:600; }
+.summary-icon { color:var(--primary); margin-right:5px; }
+.task, .cap { border-color:var(--line); border-radius:12px; box-shadow:0 3px 14px #243b5308; }
+.t-bar { height:7px; background:#edf0f7; }
+.t-bar-fill { background:linear-gradient(90deg,#635bff,#22c7e8); }
+.form-hint { background:#f2f7ff; border-color:#d8e5ff; border-radius:10px; }
+.badge { border-radius:6px; font-weight:600; }
+.guide-card { border-radius:18px; }
+
 /* ---- 首次使用指引 ---- */
 .guide-mask {
   position: fixed;
@@ -154,6 +181,8 @@ button.danger:hover { background: #ffebe9; }
   justify-content: center;
   z-index: 50;
 }
+/* hidden 属性优先级高于类选择器的 display，否则遮罩永远关不掉、挡住全部按钮 */
+.guide-mask[hidden] { display: none; }
 .guide-card {
   width: min(640px, calc(100vw - 48px));
   max-height: calc(100vh - 64px);

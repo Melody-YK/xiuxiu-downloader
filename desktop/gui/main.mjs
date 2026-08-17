@@ -154,10 +154,12 @@ if (!gotLock) {
             res.on('end', () => {
               setTimeout(() => {
                 void win.webContents
-                  .executeJavaScript('typeof window.api + "|" + document.getElementById("cap-count").textContent + "|" + document.getElementById("tasks").childElementCount + "|" + (document.getElementById("guide-modal") !== null ? 1 : 0) + "|" + (document.getElementById("s-launch") !== null ? 1 : 0)')
+                  .executeJavaScript(
+                    'typeof window.api + "|" + document.getElementById("cap-count").textContent + "|" + document.getElementById("tasks").childElementCount + "|" + (document.getElementById("guide-modal") !== null ? 1 : 0) + "|" + (document.getElementById("s-launch") !== null ? 1 : 0) + "|" + (() => { const g = document.getElementById("guide-modal"); const wasShown = g !== null && g.hidden === false; g.hidden = true; return (wasShown ? "V1" : "V0") + "/" + (getComputedStyle(g).display === "none" ? "G1" : "G0"); })()',
+                  )
                   .then((txt) => {
                     console.log('[smoke] 捕获条目数=' + captures.length + ' 任务数=' + jobs.getSnapshot().length + ' 渲染层[api|cap-count|task行数]=' + txt);
-                    app.exit(captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') ? 0 : 1);
+                    app.exit(captures.length === 1 && jobs.getSnapshot().length === 1 && txt.includes('|1|') && txt.includes('V1/G1') ? 0 : 1);
                   });
               }, 400);
             });
@@ -549,9 +551,21 @@ ipcMain.handle('diag:check', async () => {
     edgeRegistered: edge !== null,
     manifestPath,
     manifestOk,
-    extensionFolder: app.isPackaged ? null : join(here, '..', '..', 'extension'),
+    extensionFolder: findExtensionFolder(),
   };
 });
+
+// 向上找扩展文件夹（开发目录结构 / 发布版目录结构通用；找不到返回 null，按钮隐藏）
+function findExtensionFolder() {
+  let dir = app.isPackaged ? dirname(process.execPath) : join(here, '..', '..');
+  for (let i = 0; i < 5; i += 1) {
+    if (existsSync(join(dir, 'extension', 'manifest.json'))) return join(dir, 'extension');
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
 
 function regDefaultValue(key) {
   return new Promise((resolve) => {
@@ -567,7 +581,11 @@ function regDefaultValue(key) {
 }
 
 ipcMain.handle('util:openExternal', async (_e, url) => {
-  if (typeof url !== 'string' || !/^(https?:|edge:|chrome:|msedge:)/i.test(url)) return false;
+  if (typeof url !== 'string') return false;
+  // 浏览器内部页（edge://chrome://）在 Windows 上 ShellExecute 打不开，直接拉起浏览器进程
+  if (/^(edge|msedge):/i.test(url)) return openBrowserInternal(url, 'edge');
+  if (/^chrome:/i.test(url)) return openBrowserInternal(url, 'chrome');
+  if (!/^https?:/i.test(url)) return false;
   try {
     await shell.openExternal(url);
     return true;
@@ -575,6 +593,41 @@ ipcMain.handle('util:openExternal', async (_e, url) => {
     return false;
   }
 });
+
+function openBrowserInternal(url, kind) {
+  const exes =
+    kind === 'edge'
+      ? [
+          'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+          'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+        ]
+      : [
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        ];
+  return new Promise((resolve) => {
+    const tryNext = (i) => {
+      if (i >= exes.length) {
+        // 兜底：找不到浏览器就用系统默认方式打开
+        shell
+          .openExternal(url)
+          .then(() => resolve(true))
+          .catch(() => resolve(false));
+        return;
+      }
+      const exe = exes[i];
+      if (!existsSync(exe)) {
+        tryNext(i + 1);
+        return;
+      }
+      execFile(exe, [url], { windowsHide: true }, (err) => {
+        if (err !== null) tryNext(i + 1);
+        else resolve(true);
+      });
+    };
+    tryNext(0);
+  });
+}
 
 ipcMain.handle('util:openPath', async (_e, p) => {
   if (typeof p !== 'string' || p === '') return false;
