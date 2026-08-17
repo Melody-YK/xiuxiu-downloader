@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write # 创建 Release 与上传资产需要写权限
     steps:
       - uses: actions/checkout@v4
 
